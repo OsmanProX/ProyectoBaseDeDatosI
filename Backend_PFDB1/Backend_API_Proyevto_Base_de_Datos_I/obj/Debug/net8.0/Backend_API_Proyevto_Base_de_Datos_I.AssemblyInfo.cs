@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Backend_API_Proyevto_Base_de_Datos_I")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ae902482d6dbb33001aa2ac9bcbd712d33432f3a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+2e49f9fa3f3ca5f12d57c4c2ff556e11bcf6ff35")]
 [assembly: System.Reflection.AssemblyProductAttribute("Backend_API_Proyevto_Base_de_Datos_I")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Backend_API_Proyevto_Base_de_Datos_I")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
