@@ -1,0 +1,32 @@
+USE db_acf53d_dbfinal2026;
+
+
+-- Tabla 1 Rol 
+CREATE TABLE Rol(
+RolId INT PRIMARY KEY IDENTITY (1,1) NOT NULL,
+Nombre VARCHAR (30) NOT NULL, --ADMINISTRADOR, RECEPCION, TECNICO, BODEGA, CAJA
+Descripcion VARCHAR (100) NULL,
+Activo BIT NOT NULL 
+
+CONSTRAINT DF_Rol_Activo DEFAULT 1,
+CONSTRAINT PK_Rol PRIMARY KEY (RolId),
+CONSTRAINT UQ_Rol_Nombre UNIQUE (Nombre)
+);
+
+-- Tabla 2 Usuario
+CREATE TABLE Usuario(
+UsuarioId INT PRIMARY KEY IDENTITY (1,1) NOT NULL,
+NombreUsuario VARCHAR (100) NOT NULL,
+ConstrasenaHash VARCHAR (255) NOT NULL,
+NombreCompleto VARCHAR (100) NOT NULL,
+Correo VARCHAR (200) NOT NULL, -- unique
+Telefono VARCHAR (20) NULL,
+Activo BIT NOT NULL, -- default 1
+FechaCreacion DATETIME NOT NULL -- getDate()
+
+CONSTRAINT DF_Usuario_Activo DEFAULT 1,
+CONSTRAINT DF_Usuario_FechaCreacion DEFAULT GETDATE(),
+CONSTRAINT PK_Usuario PRIMARY KEY (UsuarioId),
+CONSTRAINT UQ_Usuario_NombreUsuario UNIQUE (NombreUsuario),
+CONSTRAINT UQ_Usuario_Correo UNIQUE (Correo)
+);
