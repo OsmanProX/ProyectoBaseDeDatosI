@@ -16,7 +16,7 @@ CONSTRAINT UQ_Rol_Nombre UNIQUE (Nombre)
 -- Tabla 2 Usuario
 CREATE TABLE Usuario(
 UsuarioId INT PRIMARY KEY IDENTITY (1,1) NOT NULL,
-NombreUsuario VARCHAR (100) NOT NULL,
+NombreUsuario VARCHAR (100) NOT NULL, -- unique
 ConstrasenaHash VARCHAR (255) NOT NULL,
 NombreCompleto VARCHAR (100) NOT NULL,
 Correo VARCHAR (200) NOT NULL, -- unique
@@ -29,4 +29,16 @@ CONSTRAINT DF_Usuario_FechaCreacion DEFAULT GETDATE(),
 CONSTRAINT PK_Usuario PRIMARY KEY (UsuarioId),
 CONSTRAINT UQ_Usuario_NombreUsuario UNIQUE (NombreUsuario),
 CONSTRAINT UQ_Usuario_Correo UNIQUE (Correo)
+);
+
+-- Tabla 3 UsuarioRol
+CREATE TABLE UsuarioRol (
+RolId INT NOT NULL,
+UsuarioId INT NOT NULL,
+FechaAsignacion DATETIME NOT NULL 
+
+CONSTRAINT PK_UsuarioRol PRIMARY KEY (RolId,UsuarioId),
+CONSTRAINT FK_UsuarioRol_Rol FOREIGN KEY (RolId) REFERENCES Rol(RolId),
+CONSTRAINT FK_UsuarioRol_Usuario FOREIGN KEY (UsuarioId) REFERENCES Usuario(UsuarioId),
+CONSTRAINT DF_UsuarioRol_FechaAsignacion DEFAULT GETDATE()
 );
