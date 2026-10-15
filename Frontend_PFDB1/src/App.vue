@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import HelloWorld from './components/HelloWorld.vue'
+// Por ahora la app muestra solo la pantalla de órdenes.
+// Cuando esté el login y el menú por rol (Gerson), esta vista se abre desde el menú.
+import OrdenesView from './views/OrdenesView.vue'
 </script>
 
 <template>
-  <HelloWorld />
+  <OrdenesView />
 </template>
