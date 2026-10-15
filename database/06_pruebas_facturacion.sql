@@ -39,6 +39,14 @@ JOIN dbo.OrdenServicio o ON o.OrdenId = p.Id
 JOIN dbo.EstadoOrden eo  ON eo.EstadoOrdenId = o.EstadoOrdenId;
 GO
 
+-- Si no están los datos del 05, se detiene aquí (no corre nada más)
+IF (SELECT COUNT(*) FROM #Prueba) < 2
+BEGIN
+    RAISERROR('Faltan los datos de prueba: no hay una orden LISTO sin factura o una orden en REPARACION. Corra 01, 02, 03, 04, 05, 06 y 07, y después este script.', 16, 1);
+    SET NOEXEC ON;
+END;
+GO
+
 /* ==========================================================
    FACTURA
    ========================================================== */
@@ -297,3 +305,6 @@ GO
    F15 deja la orden CANCELADO y su reparación CANCELADA con fecha de fin.
    F2, F3, F4, F6, F7, F8, F10, F11, F13 y F14 dan ERROR ESPERADO.
    Resumen: 3 pagos, saldo 0.00 y la entrega registrada. */
+
+SET NOEXEC OFF;
+GO

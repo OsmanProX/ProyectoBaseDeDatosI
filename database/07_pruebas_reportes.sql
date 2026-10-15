@@ -13,6 +13,14 @@
 SET NOCOUNT ON;
 GO
 
+-- Si no están los datos del 05 o falta el 07, se detiene aquí (no corre nada más)
+IF NOT EXISTS (SELECT 1 FROM dbo.Pago) OR OBJECT_ID('dbo.vw_TrazabilidadOrden') IS NULL
+BEGIN
+    RAISERROR('Faltan los datos de prueba o el script 07. Corra 01, 02, 03, 04, 05, 06 y 07, y después este script.', 16, 1);
+    SET NOEXEC ON;
+END;
+GO
+
 /* ==========================================================
    TRIGGERS
    ========================================================== */
@@ -208,3 +216,6 @@ GO
    T11: 4 órdenes de la HP5CD1234XYZ.
    T12: el resumen de la orden y su línea de tiempo completa.
    Consistencia: todo en 0. */
+
+SET NOEXEC OFF;
+GO
