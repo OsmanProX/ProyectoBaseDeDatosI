@@ -15,35 +15,44 @@ public class TestController : ControllerBase
     }
 
     // GET: api/test
-    // Verifica que la API este funcionando
+    // Verifica que la API este funcionando.
     [HttpGet]
     public IActionResult VerificarApi()
     {
         return Ok(new
         {
             mensaje = "API funcionando correctamente",
-            fecha = DateTime.Now
+            fecha = DateTime.UtcNow
         });
     }
 
     // GET: api/test/conexion
-    // Verifica la conexion a la base de datos
+    // Verifica la conexion a la base de datos.
     [HttpGet("conexion")]
-    public IActionResult VerificarConexion()
+    public async Task<IActionResult> VerificarConexion()
     {
         var connectionString = _configuration.GetConnectionString("DefaultConnection");
+
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return StatusCode(500, new
+            {
+                conectado = false,
+                error = "No se encontro la cadena de conexion DefaultConnection."
+            });
+        }
 
         try
         {
             using var connection = new SqlConnection(connectionString);
-            connection.Open();
+            await connection.OpenAsync();
 
             using var command = new SqlCommand(
-                "SELECT DB_NAME() AS BaseDatos, GETDATE() AS FechaServidor",
+                "SELECT DB_NAME() AS BaseDatos, GETUTCDATE() AS FechaServidor",
                 connection);
 
-            using var reader = command.ExecuteReader();
-            reader.Read();
+            using var reader = await command.ExecuteReaderAsync();
+            await reader.ReadAsync();
 
             return Ok(new
             {
@@ -57,7 +66,8 @@ public class TestController : ControllerBase
             return StatusCode(500, new
             {
                 conectado = false,
-                error = ex.Message
+                error = "No fue posible conectar con SQL Server.",
+                detalle = ex.Message
             });
         }
     }
