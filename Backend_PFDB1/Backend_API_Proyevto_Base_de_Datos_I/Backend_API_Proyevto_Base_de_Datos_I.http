@@ -1,6 +1,31 @@
 @Backend_API_Proyevto_Base_de_Datos_I_HostAddress = http://localhost:5245
 
-GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/weatherforecast/
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/test
 Accept: application/json
 
 ###
+
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/test/conexion
+Accept: application/json
+
+###
+
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/token-demo
+Accept: application/json
+
+###
+
+POST {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "admin",
+  "password": "123456"
+}
+
+###
+
+# Reemplazar TOKEN con el valor devuelto por /api/auth/login o /api/auth/token-demo
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/perfil
+Authorization: Bearer TOKEN
+Accept: application/json

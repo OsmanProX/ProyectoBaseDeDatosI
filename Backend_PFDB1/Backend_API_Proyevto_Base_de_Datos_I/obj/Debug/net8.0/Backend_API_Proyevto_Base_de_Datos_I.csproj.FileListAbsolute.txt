@@ -74,4 +74,6 @@ C:\Users\tobia\Desktop\Programas\SQL Server\Proyecto_Final_Base_De_Datos_I\Backe
 C:\Users\tobia\Desktop\Programas\SQL Server\Proyecto_Final_Base_De_Datos_I\Backend_PFDB1\Backend_API_Proyevto_Base_de_Datos_I\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerGen.dll
 C:\Users\tobia\Desktop\Programas\SQL Server\Proyecto_Final_Base_De_Datos_I\Backend_PFDB1\Backend_API_Proyevto_Base_de_Datos_I\bin\Debug\net8.0\Swashbuckle.AspNetCore.SwaggerUI.dll
 C:\Users\tobia\Desktop\Programas\SQL Server\Proyecto_Final_Base_De_Datos_I\Backend_PFDB1\Backend_API_Proyevto_Base_de_Datos_I\obj\Debug\net8.0\Backend_API_Proyevto_Base_de_Datos_I.MvcApplicationPartsAssemblyInfo.cs
+C:\Users\tobia\Desktop\Programas\SQL Server\Proyecto_Final_Base_De_Datos_I\Backend_PFDB1\Backend_API_Proyevto_Base_de_Datos_I\bin\Debug\net8.0\Dapper.dll
+C:\Users\tobia\Desktop\Programas\SQL Server\Proyecto_Final_Base_De_Datos_I\Backend_PFDB1\Backend_API_Proyevto_Base_de_Datos_I\bin\Debug\net8.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
 C:\Users\tobia\Desktop\Programas\SQL Server\Proyecto_Final_Base_De_Datos_I\Backend_PFDB1\Backend_API_Proyevto_Base_de_Datos_I\obj\Debug\net8.0\staticwebassets.upToDateCheck.txt
