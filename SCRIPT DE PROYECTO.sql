@@ -1,0 +1,78 @@
+USE db_acf53d_dbfinal2026;
+
+-- TABLA Rol
+CREATE TABLE Rol (
+RolId INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+Nombre VARCHAR (30) NOT NULL UNIQUE,
+Descripcion VARCHAR (255) NULL,
+Activo BIT NOT NULL DEFAULT 1,
+CHECK (Nombre IN ('ADMINISTRADOR','RECEPCION','TECNICO','BODEGA','CAJA'))
+);
+
+-- Tabla Usuario
+CREATE TABLE Usuario(
+UsuarioId INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+NombreUsuario VARCHAR (30) NOT NULL UNIQUE,
+ContrasenaHash VARCHAR (255) NOT NULL,
+NombreCompleto VARCHAR (100) NOT NULL,
+Correo VARCHAR (100) NOT NULL UNIQUE,
+Telefono VARCHAR (15) NULL,
+Activo BIT NOT NULL DEFAULT 1,
+FechaCreacion DATETIME NOT NULL DEFAULT GETDATE()
+);
+
+-- Tabla UsuarioRol
+CREATE TABLE UsuarioRol(
+UsuarioId INT  FOREIGN KEY (UsuarioId) REFERENCES Usuario(UsuarioId) NOT NULL,
+RolId INT FOREIGN KEY (RolId) REFERENCES Rol(RolId) NOT NULL,
+FechaAsignacion DATETIME NOT NULL DEFAULT GETDATE(),
+PRIMARY KEY (UsuarioId, RolId)
+); 
+
+-- Tabla Cliente 
+CREATE TABLE Cliente( 
+ClienteId INT IDENTITY (1,1) PRIMARY KEY NOT NULL,
+TipoCliente VARCHAR (15) NOT NULL,
+NombreRazonSocial VARCHAR(150) NOT NULL,
+NIT VARCHAR (15) NOT NULL UNIQUE,
+Telefono VARCHAR (15) NOT NULL,
+Correo VARCHAR (100) NULL,
+Direccion VARCHAR (10) NULL,
+Estado VARCHAR (10) NOT NULL DEFAULT 'ACTIVO',
+FechaRegistro DATETIME NOT NULL DEFAULT GETDATE(),
+CHECK (TipoCliente IN ('INDIVIDUAL','EMPRESARIAL')),
+CHECK (Estado IN ('ACTIVO','INACTIVO'))
+);
+
+-- Tabla TipoEquipo
+CREATE TABLE TipoEquipo(
+TipoEquipoId INT IDENTITY(1,1) PRIMARY KEY NOT NULL,
+Nombre VARCHAR(50) NOT NULL UNIQUE,
+CHECK (Nombre IN ('Laptop','Desktop','Impresora','Red'))
+);
+
+-- Tabla Equipo
+CREATE TABLE Equipo(
+ EquipoId     INT IDENTITY(1,1) PRIMARY KEY NOT NULL,
+ ClienteId    INT FOREIGN KEY (ClienteId)    REFERENCES Cliente(ClienteId)       NOT NULL,
+ TipoEquipoId INT FOREIGN KEY (TipoEquipoId) REFERENCES TipoEquipo(TipoEquipoId) NOT NULL,
+ Marca VARCHAR(50)  NOT NULL,
+ Modelo VARCHAR(50)  NOT NULL,
+ NumeroSerie VARCHAR(50)  NOT NULL UNIQUE,
+ Descripcion VARCHAR(200) NULL,
+ Estado VARCHAR(10)  NOT NULL DEFAULT 'ACTIVO',
+ CHECK (Estado IN ('ACTIVO','INACTIVO'))
+);
+
+
+
+
+
+
+
+
+
+
+
+
+
