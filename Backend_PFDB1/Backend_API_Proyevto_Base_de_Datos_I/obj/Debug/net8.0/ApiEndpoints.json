@@ -1,22 +1,22 @@
 [
   {
-    "ContainingType": "Backend_API_Proyevto_Base_de_Datos_I.Controllers.WeatherForecastController",
-    "Method": "Get",
-    "RelativePath": "WeatherForecast",
+    "ContainingType": "Backend_API_Proyevto_Base_de_Datos_I.Controllers.TestController",
+    "Method": "VerificarApi",
+    "RelativePath": "api/Test",
     "HttpMethod": "GET",
     "IsController": true,
     "Order": 0,
     "Parameters": [],
-    "ReturnTypes": [
-      {
-        "Type": "System.Collections.Generic.IEnumerable\u00601[[Backend_API_Proyevto_Base_de_Datos_I.WeatherForecast, Backend_API_Proyevto_Base_de_Datos_I, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]",
-        "MediaTypes": [
-          "text/plain",
-          "application/json",
-          "text/json"
-        ],
-        "StatusCode": 200
-      }
-    ]
+    "ReturnTypes": []
+  },
+  {
+    "ContainingType": "Backend_API_Proyevto_Base_de_Datos_I.Controllers.TestController",
+    "Method": "VerificarConexion",
+    "RelativePath": "api/Test/conexion",
+    "HttpMethod": "GET",
+    "IsController": true,
+    "Order": 0,
+    "Parameters": [],
+    "ReturnTypes": []
   }
 ]
