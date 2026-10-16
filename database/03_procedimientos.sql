@@ -227,8 +227,9 @@ GO
    sp_LoginUsuario
    Login por correo + contraseña (método normal).
    Compara el SHA256 de la contraseña con ContrasenaHash.
-   Si es exitoso devuelve los datos del usuario y sus roles;
-   si falla devuelve 0 filas.
+   Si es exitoso devuelve los datos del usuario, sus roles
+   y sus permisos activos (regla: cada usuario solo ve y
+   ejecuta las opciones de su rol); si falla devuelve 0 filas.
    ========================================================== */
 CREATE OR ALTER PROCEDURE dbo.sp_LoginUsuario
     @Correo     VARCHAR(100),
@@ -248,7 +249,13 @@ BEGIN
            (SELECT STRING_AGG(r.Nombre, ', ') WITHIN GROUP (ORDER BY r.RolId)
             FROM UsuarioRol ur
             INNER JOIN Rol r ON r.RolId = ur.RolId
-            WHERE ur.UsuarioId = u.UsuarioId) AS Roles
+            WHERE ur.UsuarioId = u.UsuarioId) AS Roles,
+           (SELECT STRING_AGG(x.permiso, ', ') WITHIN GROUP (ORDER BY x.permiso)
+            FROM (SELECT DISTINCT p.permiso
+                  FROM Permiso p
+                  INNER JOIN UsuarioRol ur ON ur.RolId = p.RolId
+                  WHERE ur.UsuarioId = u.UsuarioId
+                    AND p.activo = 1) x) AS Permisos
     FROM Usuario u
     WHERE u.Correo = @Correo
       AND u.Activo = 1

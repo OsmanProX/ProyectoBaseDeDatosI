@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
-  ordenesApi, ESTADOS, TRANSICIONES, PRIORIDADES, USUARIOS_PRUEBA,
+  ordenesApi, ESTADOS, TRANSICIONES, PRIORIDADES,
   type OrdenResumen, type HistorialEstado, type OpcionCliente, type OpcionEquipo,
   type Prioridad, type CodigoEstado,
 } from '../api/ordenes'
 
-// ---------- usuario (temporal, hasta que esté el login) ----------
-const usuarioId = ref(USUARIOS_PRUEBA[0].usuarioId)
-const usuario = computed(() => USUARIOS_PRUEBA.find((u) => u.usuarioId === usuarioId.value)!)
+// ---------- usuario de la sesión (lo guardó el login) ----------
+const datosSesion = JSON.parse(localStorage.getItem('usuario') ?? 'null') ?? {}
+const usuarioId = ref<number>(datosSesion.usuarioId ?? 0)
+const usuario = computed(() => ({
+  nombreCompleto: datosSesion.nombreCompleto ?? '',
+  rol: datosSesion.roles ?? '',
+}))
 
 // ---------- utilidades de formato ----------
 const nombreEstado = (codigo: CodigoEstado) => ESTADOS.find((e) => e.codigo === codigo)?.nombre ?? codigo
@@ -204,14 +208,6 @@ async function cambiarEstado() {
         <p class="sub">Ingreso de equipos y seguimiento de su estado.</p>
       </div>
       <div class="cabecera-der">
-        <label class="campo usuario">
-          <span>Usuario (prueba)</span>
-          <select v-model.number="usuarioId">
-            <option v-for="u in USUARIOS_PRUEBA" :key="u.usuarioId" :value="u.usuarioId">
-              {{ u.nombreUsuario }} · {{ u.rol }}
-            </option>
-          </select>
-        </label>
         <button class="btn primario" @click="abrirNueva">Nueva orden</button>
       </div>
     </header>
