@@ -9,23 +9,98 @@ GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/test/conexion
 Accept: application/json
 
 ###
-
-GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/token-demo
-Accept: application/json
-
-###
-
+# Login con usuario de la nube (devuelve el JWT)
 POST {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/login
 Content-Type: application/json
 
 {
   "usuario": "admin",
-  "password": "123456"
+  "password": "TechCare2026!"
 }
 
 ###
-
-# Reemplazar TOKEN con el valor devuelto por /api/auth/login o /api/auth/token-demo
+# Reemplazar TOKEN con el valor del login anterior
 GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/perfil
 Authorization: Bearer TOKEN
 Accept: application/json
+
+###
+# Clientes
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/cliente
+Authorization: Bearer TOKEN
+Accept: application/json
+
+###
+POST {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/cliente/crear
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+{
+  "tipoCliente": "INDIVIDUAL",
+  "nombreRazonSocial": "Prueba API",
+  "nit": "CF",
+  "telefono": "5555-5555",
+  "correo": "prueba@api.com",
+  "direccion": "Zona 1"
+}
+
+###
+# Equipos
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/equipo
+Authorization: Bearer TOKEN
+Accept: application/json
+
+###
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/equipo/tipos
+Authorization: Bearer TOKEN
+Accept: application/json
+
+###
+POST {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/equipo/crear
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+{
+  "clienteId": 1,
+  "tipoEquipoId": 1,
+  "marca": "Lenovo",
+  "modelo": "ThinkPad",
+  "numeroSerie": "SN-TEST-001",
+  "descripcion": "Equipo de prueba"
+}
+
+###
+# Órdenes
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/orden
+Authorization: Bearer TOKEN
+Accept: application/json
+
+###
+GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/orden/estados
+Authorization: Bearer TOKEN
+Accept: application/json
+
+###
+POST {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/orden/registrar
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+{
+  "clienteId": 1,
+  "equipoId": 1,
+  "usuarioRecepcionId": 1,
+  "problemaReportado": "No enciende",
+  "prioridad": "MEDIA"
+}
+
+###
+POST {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/orden/cambiar-estado
+Authorization: Bearer TOKEN
+Content-Type: application/json
+
+{
+  "ordenId": 1,
+  "estadoNuevoId": 7,
+  "usuarioId": 1,
+  "observacion": "Cancelada desde la API"
+}
