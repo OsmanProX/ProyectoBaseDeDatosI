@@ -1,0 +1,106 @@
+@import 'tailwindcss';
+@config '../../../tailwind.config.js';
+
+:root {
+  color-scheme: light;
+  --primary: 79 70 229;
+  --primary-dark: 55 48 163;
+  --accent: 20 184 166;
+  --background: 248 250 252;
+  --surface: 255 255 255;
+  --border: 226 232 240;
+  --text: 15 23 42;
+  --muted: 100 116 139;
+  --success: 22 163 74;
+  --warning: 245 158 11;
+  --danger: 220 38 38;
+  --info: 14 165 233;
+}
+.dark {
+  color-scheme: dark;
+  --primary: 129 140 248;
+  --primary-dark: 99 102 241;
+  --accent: 45 212 191;
+  --background: 11 17 32;
+  --surface: 18 27 46;
+  --border: 43 56 78;
+  --text: 241 245 249;
+  --muted: 163 178 201;
+  --success: 74 222 128;
+  --warning: 251 191 36;
+  --danger: 248 113 113;
+  --info: 56 189 248;
+}
+@layer base {
+  body {
+    @apply m-0 bg-background font-sans text-text antialiased;
+  }
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    @apply transition-colors duration-150;
+  }
+  :focus-visible {
+    @apply outline outline-2 outline-offset-4 outline-primary;
+  }
+  button:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+  h1,
+  h2,
+  h3 {
+    @apply tracking-tight;
+  }
+  ::selection {
+    @apply bg-primary/20;
+  }
+}
+@layer components {
+  .form-section {
+    @apply rounded-2xl border border-border bg-surface p-5 sm:p-6;
+  }
+  .form-intro {
+    @apply flex items-start gap-4 rounded-2xl border border-primary/10 bg-primary/5 p-5;
+  }
+  .form-intro-icon {
+    @apply flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-surface text-primary shadow-sm;
+  }
+  .form-intro h3 {
+    @apply text-base font-semibold;
+  }
+  .form-intro p {
+    @apply mt-1.5 text-sm leading-6 text-muted;
+  }
+  .form-error {
+    @apply rounded-xl border border-danger/20 bg-danger/5 p-4 text-sm text-danger;
+  }
+  .panel {
+    @apply rounded-xl border border-border bg-surface shadow-soft;
+  }
+  .control {
+    @apply min-h-11 w-full rounded-lg border border-border bg-surface px-3 py-2.5 text-sm text-text placeholder:text-muted focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-60;
+  }
+  .label {
+    @apply mb-1.5 block text-sm font-medium;
+  }
+  .eyebrow {
+    @apply text-xs font-semibold uppercase tracking-[0.16em] text-muted;
+  }
+  .icon-button {
+    @apply inline-flex h-9 w-9 items-center justify-center rounded-lg text-muted hover:bg-primary/10 hover:text-primary;
+  }
+  .field-error {
+    @apply mt-1.5 text-xs text-danger;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
