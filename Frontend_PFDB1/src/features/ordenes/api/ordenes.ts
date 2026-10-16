@@ -1,5 +1,7 @@
-// Acceso a la API de ├│rdenes de servicio. El frontend no se conecta directo a SQL Server.
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5245'
+// Acceso a la API de órdenes de servicio. El frontend no se conecta directo a SQL Server.
+import { env } from '@/core/config/env'
+
+const BASE = env.VITE_API_BASE_URL
 // Con VITE_USE_MOCK=true se usan datos de prueba en memoria (sin API ni base)
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true'
 
@@ -12,16 +14,16 @@ export type Rol = 'ADMINISTRADOR' | 'RECEPCION' | 'TECNICO' | 'BODEGA' | 'CAJA'
 // Mismos ids que la tabla EstadoOrden
 export const ESTADOS: { id: number; codigo: CodigoEstado; nombre: string }[] = [
   { id: 1, codigo: 'RECIBIDO', nombre: 'Recibido' },
-  { id: 2, codigo: 'DIAGNOSTICO', nombre: 'Diagn├│stico' },
-  { id: 3, codigo: 'ESPERANDO_AUTORIZACION', nombre: 'Esperando autorizaci├│n' },
-  { id: 4, codigo: 'REPARACION', nombre: 'Reparaci├│n' },
+  { id: 2, codigo: 'DIAGNOSTICO', nombre: 'Diagnóstico' },
+  { id: 3, codigo: 'ESPERANDO_AUTORIZACION', nombre: 'Esperando autorización' },
+  { id: 4, codigo: 'REPARACION', nombre: 'Reparación' },
   { id: 5, codigo: 'LISTO', nombre: 'Listo' },
   { id: 6, codigo: 'ENTREGADO', nombre: 'Entregado' },
   { id: 7, codigo: 'CANCELADO', nombre: 'Cancelado' },
 ]
 
 // Cambios permitidos, igual que en sp_CambiarEstadoOrden.
-// ENTREGADO no va aqu├¡: se hace en el proceso de entrega (factura y pagos).
+// ENTREGADO no va aquí: se hace en el proceso de entrega (factura y pagos).
 export const TRANSICIONES: Record<number, number[]> = {
   1: [2, 7],
   2: [3, 7],
@@ -83,7 +85,7 @@ export interface OpcionEquipo {
   numeroSerie: string
 }
 
-// Usuario con el que se trabaja mientras no est├í el login (lo reemplaza Gerson)
+// Usuario con el que se trabaja mientras no está el login (lo reemplaza Gerson)
 export interface UsuarioPrueba {
   usuarioId: number
   nombreUsuario: string
@@ -92,8 +94,8 @@ export interface UsuarioPrueba {
 }
 
 export const USUARIOS_PRUEBA: UsuarioPrueba[] = [
-  { usuarioId: 2, nombreUsuario: 'recepcion1', nombreCompleto: 'Ana Luc├¡a L├│pez', rol: 'RECEPCION' },
-  { usuarioId: 3, nombreUsuario: 'tecnico1', nombreCompleto: 'Carlos Enrique P├®rez', rol: 'TECNICO' },
+  { usuarioId: 2, nombreUsuario: 'recepcion1', nombreCompleto: 'Ana Lucía López', rol: 'RECEPCION' },
+  { usuarioId: 3, nombreUsuario: 'tecnico1', nombreCompleto: 'Carlos Enrique Pérez', rol: 'TECNICO' },
   { usuarioId: 1, nombreUsuario: 'admin', nombreCompleto: 'Administrador del Sistema', rol: 'ADMINISTRADOR' },
 ]
 
@@ -117,52 +119,73 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init,
     })
   } catch {
-    throw new ApiError('No se pudo conectar con el servidor. Verifique que la API est├® en ejecuci├│n.', 0)
+    throw new ApiError('No se pudo conectar con el servidor. Verifique que la API esté en ejecución.', 0)
   }
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}))
-    throw new ApiError(body.error ?? 'Ocurri├│ un error inesperado.', res.status)
+  // La API siempre responde { codigo, mensaje, data } (ResponseDto).
+  const body = (await res.json().catch(() => null)) as
+    | { codigo?: number; mensaje?: string; data?: T }
+    | null
+  if (!res.ok || body?.codigo !== 200) {
+    throw new ApiError(
+      body?.mensaje
+        ?? (res.status === 401 ? 'Sesión expirada. Vuelva a iniciar sesión.' : 'Ocurrió un error inesperado.'),
+      res.status,
+    )
   }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
+  return body.data as T
 }
 
 // ---------- API real ----------
+// Cliente como lo devuelve GET api/cliente (ClienteModel serializado en camelCase)
+interface ClienteApi extends OpcionCliente {
+  tipoCliente: string
+  estado: string
+}
+
 const apiReal = {
   listar(buscar: string, estado: string) {
     const q = new URLSearchParams()
     if (buscar.trim()) q.set('buscar', buscar.trim())
-    if (estado) q.set('estado', estado) // c├│digo del estado o ABIERTAS
-    return request<OrdenResumen[]>(`/api/ordenes?${q.toString()}`)
+    if (estado) q.set('estado', estado) // código del estado o ABIERTAS
+    // GET api/orden (sp_ListarOrdenes); las columnas ya vienen con estos nombres
+    return request<OrdenResumen[]>(`/api/orden?${q.toString()}`)
   },
   historial(ordenId: number) {
-    return request<HistorialEstado[]>(`/api/ordenes/${ordenId}/historial`)
+    return request<HistorialEstado[]>(`/api/orden/${ordenId}/historial`)
   },
   crear(data: NuevaOrden) {
-    return request<{ ordenId: number; numeroOrden: string }>('/api/ordenes', {
+    // POST api/orden/registrar (sp_RegistrarOrden)
+    return request<{ ordenId: number; numeroOrden: string; estado: string }>('/api/orden/registrar', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   },
   cambiarEstado(ordenId: number, estadoNuevoId: number, usuarioId: number, observacion: string | null) {
-    return request<void>(`/api/ordenes/${ordenId}/estado`, {
-      method: 'PUT',
-      body: JSON.stringify({ estadoNuevoId, usuarioId, observacion }),
+    // POST api/orden/cambiar-estado (sp_CambiarEstadoOrden)
+    return request<unknown>('/api/orden/cambiar-estado', {
+      method: 'POST',
+      body: JSON.stringify({ ordenId, estadoNuevoId, usuarioId, observacion }),
     })
   },
-  clientesActivos() {
-    return request<OpcionCliente[]>('/api/clientes?estado=ACTIVO')
+  async clientesActivos() {
+    // GET api/cliente?busqueda=...; el filtro de estado se aplica aquí
+    const lista = await request<ClienteApi[]>('/api/cliente')
+    return lista
+      .filter((c) => c.estado === 'ACTIVO')
+      .map(({ clienteId, nombreRazonSocial, nit }) => ({ clienteId, nombreRazonSocial, nit }))
   },
   equiposDeCliente(clienteId: number) {
-    return request<OpcionEquipo[]>(`/api/clientes/${clienteId}/equipos`)
+    // GET api/cliente/{id}/equipos (vw_Equipo, alias EquipoDeClienteModel)
+    return request<OpcionEquipo[]>(`/api/cliente/${clienteId}/equipos`)
   },
 }
 
 // ---------- Datos de prueba (los mismos de 02_datos_iniciales.sql) ----------
 const demoClientes: OpcionCliente[] = [
-  { clienteId: 1, nombreRazonSocial: 'Juan Carlos M├®ndez', nit: '4567890-1' },
-  { clienteId: 2, nombreRazonSocial: 'Luc├¡a Hern├índez', nit: 'CF' },
+  { clienteId: 1, nombreRazonSocial: 'Juan Carlos Méndez', nit: '4567890-1' },
+  { clienteId: 2, nombreRazonSocial: 'Lucía Hernández', nit: 'CF' },
   { clienteId: 3, nombreRazonSocial: 'Comercial El Progreso, S.A.', nit: '7890123-4' },
-  { clienteId: 4, nombreRazonSocial: 'Colegio San Andr├®s', nit: '8901234-5' },
+  { clienteId: 4, nombreRazonSocial: 'Colegio San Andrés', nit: '8901234-5' },
 ]
 
 const demoEquipos: (OpcionEquipo & { clienteId: number })[] = [
@@ -191,12 +214,12 @@ function ordenDemo(
     tipoEquipo: e.tipoEquipo,
     equipo: `${e.marca} ${e.modelo}`,
     numeroSerie: e.numeroSerie,
-    recibidoPor: 'Ana Luc├¡a L├│pez',
+    recibidoPor: 'Ana Lucía López',
     fechaIngreso,
     fechaEstimada: null,
     prioridad,
     estadoId,
-    estado: ESTADOS[estadoId - 1].codigo,
+    estado: ESTADOS[estadoId - 1]!.codigo,
     problemaReportado: problema,
     observaciones: null,
     tieneDiagnostico: diag,
@@ -205,7 +228,7 @@ function ordenDemo(
 }
 
 const demoOrdenes: OrdenDemo[] = [
-  ordenDemo(1, 1, 'ALTA', 2, '2026-10-12T09:15:00', 'La laptop no enciende, se apag├│ de golpe.', false, false),
+  ordenDemo(1, 1, 'ALTA', 2, '2026-10-12T09:15:00', 'La laptop no enciende, se apagó de golpe.', false, false),
   ordenDemo(2, 2, 'MEDIA', 7, '2026-10-12T10:40:00', 'Teclado no responde.', false, false),
   ordenDemo(3, 4, 'MEDIA', 3, '2026-10-13T08:30:00', 'La impresora no jala las hojas.', true, false),
   ordenDemo(4, 5, 'URGENTE', 4, '2026-10-13T14:05:00', 'Pantalla con rayas verticales.', true, true),
@@ -220,23 +243,23 @@ function agregarHistorial(
     historialId: siguienteHistorial++,
     ordenId,
     fechaCambio: fecha,
-    estadoAnterior: anterior ? ESTADOS[anterior - 1].codigo : null,
-    estadoNuevo: ESTADOS[nuevo - 1].codigo,
+    estadoAnterior: anterior ? ESTADOS[anterior - 1]!.codigo : null,
+    estadoNuevo: ESTADOS[nuevo - 1]!.codigo,
     usuario,
     observacion: obs,
   })
 }
-agregarHistorial(1, '2026-10-12T09:15:00', null, 1, 'recepcion1', 'Orden registrada en recepci├│n')
-agregarHistorial(1, '2026-10-12T11:00:00', 1, 2, 'tecnico1', 'Inicia revisi├│n del equipo')
-agregarHistorial(2, '2026-10-12T10:40:00', null, 1, 'recepcion1', 'Orden registrada en recepci├│n')
-agregarHistorial(2, '2026-10-12T12:10:00', 1, 7, 'recepcion1', 'El cliente decidi├│ no reparar')
-agregarHistorial(3, '2026-10-13T08:30:00', null, 1, 'recepcion1', 'Orden registrada en recepci├│n')
-agregarHistorial(3, '2026-10-13T09:20:00', 1, 2, 'tecnico2', 'Revisi├│n del rodillo de arrastre')
-agregarHistorial(3, '2026-10-13T15:45:00', 2, 3, 'tecnico2', 'Se cotiz├│ cambio de rodillo, falta respuesta del cliente')
-agregarHistorial(4, '2026-10-13T14:05:00', null, 1, 'recepcion1', 'Orden registrada en recepci├│n')
+agregarHistorial(1, '2026-10-12T09:15:00', null, 1, 'recepcion1', 'Orden registrada en recepción')
+agregarHistorial(1, '2026-10-12T11:00:00', 1, 2, 'tecnico1', 'Inicia revisión del equipo')
+agregarHistorial(2, '2026-10-12T10:40:00', null, 1, 'recepcion1', 'Orden registrada en recepción')
+agregarHistorial(2, '2026-10-12T12:10:00', 1, 7, 'recepcion1', 'El cliente decidió no reparar')
+agregarHistorial(3, '2026-10-13T08:30:00', null, 1, 'recepcion1', 'Orden registrada en recepción')
+agregarHistorial(3, '2026-10-13T09:20:00', 1, 2, 'tecnico2', 'Revisión del rodillo de arrastre')
+agregarHistorial(3, '2026-10-13T15:45:00', 2, 3, 'tecnico2', 'Se cotizó cambio de rodillo, falta respuesta del cliente')
+agregarHistorial(4, '2026-10-13T14:05:00', null, 1, 'recepcion1', 'Orden registrada en recepción')
 agregarHistorial(4, '2026-10-13T14:30:00', 1, 2, 'tecnico1', null)
 agregarHistorial(4, '2026-10-13T16:00:00', 2, 3, 'tecnico1', 'Cambio de pantalla, Q 650')
-agregarHistorial(4, '2026-10-14T08:10:00', 3, 4, 'tecnico1', 'Cliente autoriz├│ por tel├®fono')
+agregarHistorial(4, '2026-10-14T08:10:00', 3, 4, 'tecnico1', 'Cliente autorizó por teléfono')
 
 const esperar = () => new Promise((r) => setTimeout(r, 250))
 const ahora = () => new Date().toISOString()
@@ -271,16 +294,16 @@ const apiDemo = {
     if (!data.problemaReportado.trim())
       throw new ApiError('Debe describir el problema reportado por el cliente.', 400)
     if (!PRIORIDADES.includes(data.prioridad))
-      throw new ApiError('Prioridad inv├ílida. Use BAJA, MEDIA, ALTA o URGENTE.', 400)
+      throw new ApiError('Prioridad inválida. Use BAJA, MEDIA, ALTA o URGENTE.', 400)
     if (data.fechaEstimada && data.fechaEstimada < hoy())
       throw new ApiError('La fecha estimada no puede ser anterior a hoy.', 400)
     const equipo = demoEquipos.find((e) => e.equipoId === data.equipoId)
-    if (!equipo) throw new ApiError('El equipo no existe o est├í inactivo.', 400)
+    if (!equipo) throw new ApiError('El equipo no existe o está inactivo.', 400)
     if (equipo.clienteId !== data.clienteId)
       throw new ApiError('El equipo no pertenece al cliente indicado.', 400)
     const u = usuarioDemo(data.usuarioRecepcionId)
     if (!u || (u.rol !== 'RECEPCION' && u.rol !== 'ADMINISTRADOR'))
-      throw new ApiError('El usuario no est├í autorizado para recibir equipos (rol RECEPCION o ADMINISTRADOR).', 403)
+      throw new ApiError('El usuario no está autorizado para recibir equipos (rol RECEPCION o ADMINISTRADOR).', 403)
     if (demoOrdenes.some((o) => o.equipoId === data.equipoId && o.estadoId !== 6 && o.estadoId !== 7))
       throw new ApiError('El equipo ya tiene una orden abierta. Cierre o cancele esa orden primero.', 409)
 
@@ -290,7 +313,7 @@ const apiDemo = {
     nueva.fechaEstimada = data.fechaEstimada
     nueva.observaciones = data.observaciones
     demoOrdenes.push(nueva)
-    agregarHistorial(ordenId, ahora(), null, 1, u.nombreUsuario, 'Orden registrada en recepci├│n')
+    agregarHistorial(ordenId, ahora(), null, 1, u.nombreUsuario, 'Orden registrada en recepción')
     return { ordenId, numeroOrden: nueva.numeroOrden }
   },
 
@@ -307,20 +330,20 @@ const apiDemo = {
     const o = demoOrdenes.find((x) => x.ordenId === ordenId)
     if (!o) throw new ApiError('La orden no existe.', 404)
     if (o.estadoId === 6 || o.estadoId === 7)
-      throw new ApiError('La orden ya est├í cerrada (ENTREGADO o CANCELADO) y no admite cambios.', 409)
+      throw new ApiError('La orden ya está cerrada (ENTREGADO o CANCELADO) y no admite cambios.', 409)
     if (o.estadoId === estadoNuevoId) throw new ApiError('La orden ya se encuentra en ese estado.', 409)
     if (!(TRANSICIONES[o.estadoId] ?? []).includes(estadoNuevoId))
       throw new ApiError('Cambio de estado no permitido para el estado actual de la orden.', 409)
     if ((estadoNuevoId === 3 || estadoNuevoId === 4) && !o.tieneDiagnostico)
-      throw new ApiError('La orden todav├¡a no tiene diagn├│stico registrado.', 409)
+      throw new ApiError('La orden todavía no tiene diagnóstico registrado.', 409)
     if (estadoNuevoId === 5 && !o.tieneReparacion)
-      throw new ApiError('La orden todav├¡a no tiene una reparaci├│n registrada.', 409)
+      throw new ApiError('La orden todavía no tiene una reparación registrada.', 409)
     if (estadoNuevoId === 7 && !observacion?.trim())
-      throw new ApiError('Indique el motivo de la cancelaci├│n en la observaci├│n.', 400)
+      throw new ApiError('Indique el motivo de la cancelación en la observación.', 400)
 
     agregarHistorial(ordenId, ahora(), o.estadoId, estadoNuevoId, u!.nombreUsuario, observacion?.trim() || null)
     o.estadoId = estadoNuevoId
-    o.estado = ESTADOS[estadoNuevoId - 1].codigo
+    o.estado = ESTADOS[estadoNuevoId - 1]!.codigo
   },
 
   async clientesActivos(): Promise<OpcionCliente[]> {

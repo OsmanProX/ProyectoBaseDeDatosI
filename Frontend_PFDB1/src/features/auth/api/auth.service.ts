@@ -1,7 +1,7 @@
 import axios from 'axios'
 import { env } from '@/core/config/env'
 import { requestData } from '@/core/api/httpClient'
-import type { FilaPermiso, ResultadoLogin } from '../types/auth.types'
+import type { ResultadoLogin } from '../types/auth.types'
 
 // Axios propio sin los interceptores de httpClient: el login trae el token
 // en la raíz de la respuesta (no dentro de data) y no debe desempaquetarse.
@@ -39,10 +39,10 @@ export const authService = {
     }
   },
 
-  /** Permisos activos del usuario autenticado (GET /api/Permiso con Bearer). */
+  /** Códigos de permiso activos del usuario del token (GET /api/Permiso/mios con Bearer).
+   *  El endpoint consulta vw_UsuarioPermiso y devuelve solo los códigos. */
   async fetchPermisos(): Promise<string[]> {
-    const filas = await requestData<FilaPermiso[]>({ method: 'GET', url: '/api/Permiso' })
-    const activos = (filas ?? []).filter((f) => f.activo === true || f.activo === 1)
-    return [...new Set(activos.map((f) => f.permiso))]
+    const codigos = await requestData<string[]>({ method: 'GET', url: '/api/Permiso/mios' })
+    return [...new Set(codigos ?? [])]
   },
 }

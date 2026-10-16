@@ -12,11 +12,3 @@ export interface ResultadoLogin {
   expira: string
   usuario: UsuarioSesion
 }
-
-export interface FilaPermiso {
-  permisoId: number
-  rolId: number
-  rol: string
-  permiso: string
-  activo: boolean | number
-}

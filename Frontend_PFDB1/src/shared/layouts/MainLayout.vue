@@ -26,6 +26,10 @@ const collapsed = ref(false)
 const mobileOpen = ref(false)
 const title = computed(() => String(route.meta.title ?? 'Inicio'))
 
+// Menú filtrado por los permisos del usuario (tabla Permiso vía /api/Permiso/mios)
+const navItems = computed(() =>
+  staticNavigation.filter((item) => !item.permiso || auth.tienePermiso(item.permiso)))
+
 function cerrarSesion() {
   auth.logout()
   router.push({ name: 'login' })
@@ -79,7 +83,7 @@ function cerrarSesion() {
         <p v-if="!collapsed" class="eyebrow px-3 pb-3 pt-5 text-[10px]">Navegación</p>
         <nav>
           <RouterLink
-            v-for="item in staticNavigation"
+            v-for="item in navItems"
             :key="item.id"
             :to="item.path"
             :aria-label="item.name"

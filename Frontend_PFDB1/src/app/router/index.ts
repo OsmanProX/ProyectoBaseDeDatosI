@@ -49,6 +49,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Usuarios', requiresAuth: true, permiso: 'VER_USUARIOS' },
       },
       {
+        path: 'acceso-denegado',
+        name: 'acceso-denegado',
+        component: () => import('@/app/views/AccesoDenegadoView.vue'),
+        meta: { title: 'Acceso denegado' },
+      },
+      {
         path: ':pathMatch(.*)*',
         component: () => import('@/app/views/NotFoundView.vue'),
         meta: { title: 'Página no encontrada' },
@@ -78,7 +84,7 @@ router.beforeEach((to) => {
 
   // Control de permisos por rol (tabla Permiso)
   if (to.meta.permiso && !auth.tienePermiso(to.meta.permiso)) {
-    return { name: 'home' }
+    return { name: 'acceso-denegado' }
   }
 
   return true

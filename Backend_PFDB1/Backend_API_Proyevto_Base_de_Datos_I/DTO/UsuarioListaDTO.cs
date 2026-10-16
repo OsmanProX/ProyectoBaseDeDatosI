@@ -1,4 +1,5 @@
 using Backend_API_Proyevto_Base_de_Datos_I.BD;
+using Backend_API_Proyevto_Base_de_Datos_I.Models;
 using Dapper;
 
 namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
@@ -20,17 +21,9 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                string sql = @"
-                    SELECT u.UsuarioId, u.NombreUsuario, u.NombreCompleto,
-                           u.Correo, u.Telefono, u.Activo,
-                           (SELECT STRING_AGG(r.Nombre, ', ') WITHIN GROUP (ORDER BY r.RolId)
-                            FROM UsuarioRol ur
-                            INNER JOIN Rol r ON r.RolId = ur.RolId
-                            WHERE ur.UsuarioId = u.UsuarioId) AS Roles
-                    FROM Usuario u
-                    ORDER BY u.UsuarioId";
-
-                var lista = await connection.QueryAsync(sql);
+                // vw_UsuarioLista (script 10): usuarios con sus roles ya concatenados.
+                var lista = await connection.QueryAsync<UsuarioListaModel>(
+                    "SELECT UsuarioId, NombreUsuario, NombreCompleto, Correo, Telefono, Activo, Roles FROM vw_UsuarioLista ORDER BY UsuarioId");
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Operación realizada exitosamente.";

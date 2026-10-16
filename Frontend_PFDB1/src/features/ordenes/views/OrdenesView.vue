@@ -1,25 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useAuthStore } from '@/features/auth/stores/auth.store'
 import {
   ordenesApi, ESTADOS, TRANSICIONES, PRIORIDADES,
   type OrdenResumen, type HistorialEstado, type OpcionCliente, type OpcionEquipo,
   type Prioridad, type CodigoEstado,
 } from '../api/ordenes'
 
-// ---------- usuario de la sesi├│n (lo guard├│ el login) ----------
-const datosSesion = JSON.parse(sessionStorage.getItem('usuario') ?? 'null') ?? {}
-const usuarioId = ref<number>(datosSesion.usuarioId ?? 0)
+// ---------- usuario de la sesión (guardado por el login; permisos por rol) ----------
+const auth = useAuthStore()
+const usuarioId = computed(() => auth.usuario?.usuarioId ?? 0)
 const usuario = computed(() => ({
-  nombreCompleto: datosSesion.nombreCompleto ?? '',
-  rol: datosSesion.roles ?? '',
+  nombreCompleto: auth.usuario?.nombreCompleto ?? '',
+  rol: auth.rol,
 }))
+const puedeCrear = computed(() => auth.tienePermiso('CREAR_ORDENES'))
+const puedeCambiarEstado = computed(() => auth.tienePermiso('CAMBIAR_ESTADO_ORDEN'))
 
 // ---------- utilidades de formato ----------
 const nombreEstado = (codigo: CodigoEstado) => ESTADOS.find((e) => e.codigo === codigo)?.nombre ?? codigo
 const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })
 const fecha = (iso: string | null) =>
-  iso ? new Date(iso.length === 10 ? iso + 'T00:00:00' : iso).toLocaleDateString('es-GT') : 'ÔÇö'
+  iso ? new Date(iso.length === 10 ? iso + 'T00:00:00' : iso).toLocaleDateString('es-GT') : '—'
 const hoy = new Date().toISOString().slice(0, 10)
 
 // ---------- listado ----------
@@ -103,7 +106,7 @@ watch(() => nueva.clienteId, async (id) => {
   }
 })
 
-// Validaci├│n en la interfaz (el procedimiento vuelve a validar todo)
+// Validación en la interfaz (el procedimiento vuelve a validar todo)
 function validarNueva(): boolean {
   limpiarErrores()
   if (!nueva.clienteId) errores.clienteId = 'Seleccione el cliente.'
@@ -178,7 +181,7 @@ async function cambiarEstado() {
   errorCambio.value = ''
   if (!estadoNuevoId.value) { errorCambio.value = 'Seleccione el nuevo estado.'; return }
   if (estadoNuevoId.value === 7 && !observacion.value.trim()) {
-    errorCambio.value = 'Indique el motivo de la cancelaci├│n.'
+    errorCambio.value = 'Indique el motivo de la cancelación.'
     return
   }
   cambiando.value = true
@@ -190,7 +193,7 @@ async function cambiarEstado() {
     actual.value.estado = est.codigo
     estadoNuevoId.value = 0
     observacion.value = ''
-    mostrarAviso(`${actual.value.numeroOrden} pas├│ a ${est.nombre}.`)
+    mostrarAviso(`${actual.value.numeroOrden} pasó a ${est.nombre}.`)
     await Promise.all([cargarHistorial(), cargar()])
   } catch (e) {
     errorCambio.value = (e as Error).message
@@ -204,11 +207,11 @@ async function cambiarEstado() {
   <main class="pagina">
     <header class="cabecera">
       <div>
-        <h1>├ôrdenes de servicio</h1>
+        <h1>Órdenes de servicio</h1>
         <p class="sub">Ingreso de equipos y seguimiento de su estado.</p>
       </div>
       <div class="cabecera-der">
-        <button class="btn primario" @click="abrirNueva">Nueva orden</button>
+        <button v-if="puedeCrear" class="btn primario" @click="abrirNueva">Nueva orden</button>
       </div>
     </header>
 
@@ -217,7 +220,7 @@ async function cambiarEstado() {
     <section class="filtros">
       <label class="campo grande">
         <span>Buscar</span>
-        <input v-model="buscar" type="search" placeholder="N├║mero de orden, cliente o n├║mero de serie" />
+        <input v-model="buscar" type="search" placeholder="Número de orden, cliente o número de serie" />
       </label>
       <label class="campo">
         <span>Estado</span>
@@ -239,15 +242,15 @@ async function cambiarEstado() {
           </tr>
         </thead>
         <tbody>
-          <tr v-if="cargando"><td colspan="7" class="vacio">Cargando ├│rdenesÔÇª</td></tr>
+          <tr v-if="cargando"><td colspan="7" class="vacio">Cargando órdenes…</td></tr>
           <tr v-else-if="!ordenes.length">
-            <td colspan="7" class="vacio">No hay ├│rdenes con ese criterio. Use ┬½Nueva orden┬╗ para registrar un ingreso.</td>
+            <td colspan="7" class="vacio">No hay órdenes con ese criterio. Use «Nueva orden» para registrar un ingreso.</td>
           </tr>
           <tr v-for="o in ordenes" :key="o.ordenId">
             <td class="num">{{ o.numeroOrden }}</td>
             <td>{{ o.cliente }}</td>
             <td>
-              {{ o.tipoEquipo }} ┬À {{ o.equipo }}
+              {{ o.tipoEquipo }} · {{ o.equipo }}
               <div class="serie">{{ o.numeroSerie }}</div>
             </td>
             <td><span class="prio" :class="o.prioridad.toLowerCase()">{{ o.prioridad }}</span></td>
@@ -269,9 +272,9 @@ async function cambiarEstado() {
         <label class="campo">
           <span>Cliente</span>
           <select v-model.number="nueva.clienteId" :aria-invalid="!!errores.clienteId">
-            <option :value="0" disabled>Seleccione un clienteÔÇª</option>
+            <option :value="0" disabled>Seleccione un cliente…</option>
             <option v-for="c in clientes" :key="c.clienteId" :value="c.clienteId">
-              {{ c.nombreRazonSocial }} ÔÇö NIT {{ c.nit }}
+              {{ c.nombreRazonSocial }} — NIT {{ c.nit }}
             </option>
           </select>
           <small v-if="errores.clienteId">{{ errores.clienteId }}</small>
@@ -282,11 +285,11 @@ async function cambiarEstado() {
           <select v-model.number="nueva.equipoId" :disabled="!nueva.clienteId || cargandoEquipos"
                   :aria-invalid="!!errores.equipoId">
             <option :value="0" disabled>
-              {{ !nueva.clienteId ? 'Primero seleccione el cliente' : cargandoEquipos ? 'Cargando equiposÔÇª'
-                : equipos.length ? 'Seleccione un equipoÔÇª' : 'El cliente no tiene equipos registrados' }}
+              {{ !nueva.clienteId ? 'Primero seleccione el cliente' : cargandoEquipos ? 'Cargando equipos…'
+                : equipos.length ? 'Seleccione un equipo…' : 'El cliente no tiene equipos registrados' }}
             </option>
             <option v-for="e in equipos" :key="e.equipoId" :value="e.equipoId">
-              {{ e.tipoEquipo }} {{ e.marca }} {{ e.modelo }} ÔÇö Serie {{ e.numeroSerie }}
+              {{ e.tipoEquipo }} {{ e.marca }} {{ e.modelo }} — Serie {{ e.numeroSerie }}
             </option>
           </select>
           <small v-if="errores.equipoId">{{ errores.equipoId }}</small>
@@ -317,13 +320,13 @@ async function cambiarEstado() {
         <label class="campo">
           <span>Observaciones (opcional)</span>
           <textarea v-model="nueva.observaciones" rows="2" maxlength="500"
-                    placeholder="Accesorios que deja, estado f├¡sico, etc."></textarea>
+                    placeholder="Accesorios que deja, estado físico, etc."></textarea>
         </label>
 
         <div class="botones">
           <button type="button" class="btn" @click="dlgNueva?.close()">Cancelar</button>
           <button type="submit" class="btn primario" :disabled="guardando">
-            {{ guardando ? 'RegistrandoÔÇª' : 'Registrar orden' }}
+            {{ guardando ? 'Registrando…' : 'Registrar orden' }}
           </button>
         </div>
       </form>
@@ -339,8 +342,8 @@ async function cambiarEstado() {
 
         <dl class="datos">
           <div><dt>Cliente</dt><dd>{{ actual.cliente }}</dd></div>
-          <div><dt>Equipo</dt><dd>{{ actual.tipoEquipo }} ┬À {{ actual.equipo }}</dd></div>
-          <div><dt>N├║mero de serie</dt><dd class="num">{{ actual.numeroSerie }}</dd></div>
+          <div><dt>Equipo</dt><dd>{{ actual.tipoEquipo }} · {{ actual.equipo }}</dd></div>
+          <div><dt>Número de serie</dt><dd class="num">{{ actual.numeroSerie }}</dd></div>
           <div><dt>Recibido por</dt><dd>{{ actual.recibidoPor }}</dd></div>
           <div><dt>Ingreso</dt><dd>{{ fechaHora(actual.fechaIngreso) }}</dd></div>
           <div><dt>Fecha estimada</dt><dd>{{ fecha(actual.fechaEstimada) }}</dd></div>
@@ -352,45 +355,48 @@ async function cambiarEstado() {
         <h3>Historial de estados</h3>
         <div class="tabla-wrap">
           <table class="compacta">
-            <thead><tr><th>Fecha</th><th>De</th><th>A</th><th>Usuario</th><th>Observaci├│n</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>De</th><th>A</th><th>Usuario</th><th>Observación</th></tr></thead>
             <tbody>
-              <tr v-if="cargandoHistorial"><td colspan="5" class="vacio">Cargando historialÔÇª</td></tr>
+              <tr v-if="cargandoHistorial"><td colspan="5" class="vacio">Cargando historial…</td></tr>
               <tr v-for="h in historial" :key="h.historialId">
                 <td class="fecha">{{ fechaHora(h.fechaCambio) }}</td>
                 <td>{{ h.estadoAnterior ? nombreEstado(h.estadoAnterior) : '(inicio)' }}</td>
                 <td>{{ nombreEstado(h.estadoNuevo) }}</td>
                 <td>{{ h.usuario }}</td>
-                <td>{{ h.observacion ?? 'ÔÇö' }}</td>
+                <td>{{ h.observacion ?? '—' }}</td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <h3>Cambiar estado</h3>
-        <p v-if="cerrada" class="nota">La orden est├í cerrada ({{ nombreEstado(actual.estado) }}) y ya no admite cambios.</p>
-        <p v-else-if="actual.estadoId === 5" class="nota">
-          La orden est├í lista. El paso a Entregado se hace desde Entrega, despu├®s de facturar y pagar.
+        <p v-if="!puedeCambiarEstado && !cerrada && actual.estadoId !== 5" class="nota">
+          No tiene permiso para cambiar el estado de la orden (requiere CAMBIAR_ESTADO_ORDEN).
         </p>
-        <form v-else class="cambio" @submit.prevent="cambiarEstado" novalidate>
+        <p v-else-if="cerrada" class="nota">La orden está cerrada ({{ nombreEstado(actual.estado) }}) y ya no admite cambios.</p>
+        <p v-else-if="actual.estadoId === 5" class="nota">
+          La orden está lista. El paso a Entregado se hace desde Entrega, después de facturar y pagar.
+        </p>
+        <form v-else-if="puedeCambiarEstado && actual.estadoId !== 5" class="cambio" @submit.prevent="cambiarEstado" novalidate>
           <p v-if="errorCambio" class="error" role="alert">{{ errorCambio }}</p>
           <div class="fila">
             <label class="campo">
               <span>Nuevo estado</span>
               <select v-model.number="estadoNuevoId">
-                <option :value="0" disabled>SeleccioneÔÇª</option>
+                <option :value="0" disabled>Seleccione…</option>
                 <option v-for="e in opcionesEstado" :key="e.id" :value="e.id">{{ e.nombre }}</option>
               </select>
             </label>
             <label class="campo">
-              <span>Observaci├│n {{ estadoNuevoId === 7 ? '(obligatoria)' : '(opcional)' }}</span>
+              <span>Observación {{ estadoNuevoId === 7 ? '(obligatoria)' : '(opcional)' }}</span>
               <input v-model="observacion" maxlength="300"
-                     :placeholder="estadoNuevoId === 7 ? 'Motivo de la cancelaci├│n' : ''" />
+                     :placeholder="estadoNuevoId === 7 ? 'Motivo de la cancelación' : ''" />
             </label>
           </div>
           <p class="nota">Cambia: <b>{{ usuario.nombreCompleto }}</b> ({{ usuario.rol }})</p>
           <div class="botones">
             <button type="submit" class="btn primario" :disabled="cambiando">
-              {{ cambiando ? 'GuardandoÔÇª' : 'Cambiar estado' }}
+              {{ cambiando ? 'Guardando…' : 'Cambiar estado' }}
             </button>
           </div>
         </form>

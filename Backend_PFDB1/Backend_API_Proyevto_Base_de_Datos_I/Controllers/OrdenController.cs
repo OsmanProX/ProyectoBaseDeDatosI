@@ -17,15 +17,15 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             _dbConnectionFactory = dbConnectionFactory;
         }
 
-        // GET: api/orden?estadoId=1&clienteId=2
+        // GET: api/orden?buscar=OS-2026&estado=ABIERTAS  (sp_ListarOrdenes, script 10)
         [HttpGet]
-        public async Task<IActionResult> Consultar([FromQuery] int? estadoId, [FromQuery] int? clienteId)
+        public async Task<IActionResult> Consultar([FromQuery] string? buscar, [FromQuery] string? estado)
         {
             try
             {
                 var request = new OrdenDTO();
                 request.SetConexion(_dbConnectionFactory);
-                var respuesta = await request.Consultar(estadoId, clienteId);
+                var respuesta = await request.Consultar(buscar, estado);
                 return StatusCode(respuesta.codigo, new { respuesta.codigo, respuesta.mensaje, respuesta.data });
             }
             catch (Exception ex)
@@ -65,6 +65,23 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             catch (Exception ex)
             {
                 return StatusCode(500, new { codigo = 500, mensaje = "ConsultarEstados(): " + ex.Message });
+            }
+        }
+
+        // GET: api/orden/5/historial  (solo el historial de estados)
+        [HttpGet("{id:int}/historial")]
+        public async Task<IActionResult> ConsultarHistorial(int id)
+        {
+            try
+            {
+                var request = new OrdenDTO();
+                request.SetConexion(_dbConnectionFactory);
+                var respuesta = await request.ConsultarHistorial(id);
+                return StatusCode(respuesta.codigo, new { respuesta.codigo, respuesta.mensaje, respuesta.data });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { codigo = 500, mensaje = "ConsultarHistorial(): " + ex.Message });
             }
         }
 

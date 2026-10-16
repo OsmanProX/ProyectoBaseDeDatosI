@@ -66,6 +66,33 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             return respuesta;
         }
 
+        // Equipos ACTIVOS de un cliente (para el formulario de nueva orden). Usa vw_Equipo.
+        public async Task<ResponseDto> ConsultarEquipos(int id)
+        {
+            ResponseDto respuesta = new();
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+
+                var lista = await connection.QueryAsync<EquipoDeClienteModel>(
+                    @"SELECT EquipoId, TipoEquipo, Marca, Modelo, NumeroSerie
+                      FROM vw_Equipo
+                      WHERE ClienteId = @Id AND Estado = 'ACTIVO'
+                      ORDER BY EquipoId",
+                    new { Id = id });
+
+                respuesta.codigo = 200;
+                respuesta.mensaje = "Operación realizada exitosamente.";
+                respuesta.data = lista.ToList();
+            }
+            catch (Exception ex)
+            {
+                respuesta = new ResponseDto { codigo = 500, mensaje = "ConsultarEquipos(): " + ex.Message };
+            }
+            return respuesta;
+        }
+
         public async Task<ResponseDto> ConsultarPorId(int id)
         {
             ResponseDto respuesta = new();

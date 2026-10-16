@@ -51,6 +51,23 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             }
         }
 
+        // GET: api/cliente/5/equipos  (equipos activos del cliente, para nueva orden)
+        [HttpGet("{id:int}/equipos")]
+        public async Task<IActionResult> ConsultarEquipos(int id)
+        {
+            try
+            {
+                var request = new ClienteDTO();
+                request.SetConexion(_dbConnectionFactory);
+                var respuesta = await request.ConsultarEquipos(id);
+                return StatusCode(respuesta.codigo, new { respuesta.codigo, respuesta.mensaje, respuesta.data });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { codigo = 500, mensaje = "ConsultarEquipos(): " + ex.Message });
+            }
+        }
+
         // POST: api/cliente/crear
         [HttpPost("crear")]
         public async Task<IActionResult> Crear([FromBody] ClienteDTO request)

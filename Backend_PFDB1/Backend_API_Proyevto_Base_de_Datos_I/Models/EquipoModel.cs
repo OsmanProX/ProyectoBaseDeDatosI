@@ -14,6 +14,16 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
         public string Estado { get; set; } = "ACTIVO";
     }
 
+    // Salida de GET api/cliente/{id}/equipos (alias de vw_Equipo, nombres del frontend)
+    public class EquipoDeClienteModel
+    {
+        public int EquipoId { get; set; }
+        public string? TipoEquipo { get; set; }
+        public string Marca { get; set; } = string.Empty;
+        public string Modelo { get; set; } = string.Empty;
+        public string NumeroSerie { get; set; } = string.Empty;
+    }
+
     public class TipoEquipoModel
     {
         public int TipoEquipoId { get; set; }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { env } from '@/core/config/env'
 
 interface UsuarioFila {
   usuarioId: number
@@ -11,7 +12,7 @@ interface UsuarioFila {
   roles: string | null
 }
 
-const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:5245'
+const BASE = env.VITE_API_BASE_URL
 
 const usuarios = ref<UsuarioFila[]>([])
 const cargando = ref(false)
@@ -31,7 +32,7 @@ onMounted(async () => {
       error.value = data.mensaje ?? 'No se pudo cargar la lista de usuarios.'
     }
   } catch {
-    error.value = 'No se pudo conectar con el servidor. Verifique que la API est├® en ejecuci├│n.'
+    error.value = 'No se pudo conectar con el servidor. Verifique que la API esté en ejecución.'
   } finally {
     cargando.value = false
   }
@@ -59,14 +60,14 @@ const esActivo = (u: UsuarioFila) => u.activo === true || u.activo === 1
             <th>Nombre completo</th>
             <th>Nickname</th>
             <th>Correo</th>
-            <th>Tel├®fono</th>
+            <th>Teléfono</th>
             <th>Roles</th>
             <th>Estado</th>
           </tr>
         </thead>
         <tbody>
           <tr v-if="cargando">
-            <td colspan="7" class="vacio">Cargando usuariosÔÇª</td>
+            <td colspan="7" class="vacio">Cargando usuarios…</td>
           </tr>
           <tr v-else-if="!usuarios.length">
             <td colspan="7" class="vacio">No hay usuarios registrados.</td>
@@ -76,7 +77,7 @@ const esActivo = (u: UsuarioFila) => u.activo === true || u.activo === 1
             <td class="fuerte">{{ u.nombreCompleto }}</td>
             <td>@{{ u.nombreUsuario }}</td>
             <td>{{ u.correo }}</td>
-            <td>{{ u.telefono ?? 'ÔÇö' }}</td>
+            <td>{{ u.telefono ?? '—' }}</td>
             <td><span class="chip-rol">{{ u.roles ?? 'SIN ROL' }}</span></td>
             <td>
               <span class="chip" :class="esActivo(u) ? 'activo' : 'inactivo'">
