@@ -56,6 +56,8 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
                     Id = data.UsuarioId,
                     UsuarioLogin = data.NombreUsuario,
                     Password = string.Empty,
+                    NombreCompleto = data.NombreCompleto,
+                    Correo = data.Correo,
                     Rol = (string)data.Roles
                 };
 

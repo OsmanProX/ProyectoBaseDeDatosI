@@ -223,9 +223,42 @@ BEGIN
 END;
 GO
 
--- Verificar que se crearon los 2 procedimientos
+/* ==========================================================
+   sp_LoginUsuario
+   Login por correo + contraseña (método normal).
+   Compara el SHA256 de la contraseña con ContrasenaHash.
+   Si es exitoso devuelve los datos del usuario y sus roles;
+   si falla devuelve 0 filas.
+   ========================================================== */
+CREATE OR ALTER PROCEDURE dbo.sp_LoginUsuario
+    @Correo     VARCHAR(100),
+    @Contrasena VARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    DECLARE @Hash VARCHAR(64) =
+        UPPER(CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', @Contrasena), 2));
+
+    SELECT u.UsuarioId,
+           u.NombreUsuario,
+           u.NombreCompleto,
+           u.Correo,
+           u.Telefono,
+           (SELECT STRING_AGG(r.Nombre, ', ') WITHIN GROUP (ORDER BY r.RolId)
+            FROM UsuarioRol ur
+            INNER JOIN Rol r ON r.RolId = ur.RolId
+            WHERE ur.UsuarioId = u.UsuarioId) AS Roles
+    FROM Usuario u
+    WHERE u.Correo = @Correo
+      AND u.Activo = 1
+      AND (u.ContrasenaHash = @Hash OR u.ContrasenaHash = @Contrasena);
+END;
+GO
+
+-- Verificar que se crearon los 3 procedimientos
 SELECT name AS Procedimiento, create_date, modify_date
 FROM sys.procedures
-WHERE name IN ('sp_RegistrarOrden', 'sp_CambiarEstadoOrden')
+WHERE name IN ('sp_RegistrarOrden', 'sp_CambiarEstadoOrden', 'sp_LoginUsuario')
 ORDER BY name;
 GO

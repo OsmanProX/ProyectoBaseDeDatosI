@@ -30,7 +30,9 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
             {
                 new(JwtRegisteredClaimNames.Sub, usuario.Id.ToString()),
                 new(JwtRegisteredClaimNames.UniqueName, usuario.UsuarioLogin),
-                new(ClaimTypes.Name, usuario.UsuarioLogin),
+                new(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
+                new(ClaimTypes.Name, usuario.NombreCompleto),
+                new(ClaimTypes.Email, usuario.Correo ?? string.Empty),
                 new(ClaimTypes.Role, usuario.Rol)
             };
 

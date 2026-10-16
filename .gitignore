@@ -1,17 +1,16 @@
-# Visual Studio
+# Backend .NET
 .vs/
-*.vsidx
-*.slnx
-*.user
-
-# .NET (archivos compilados)
 bin/
 obj/
+*.user
+*.suo
+*.vsidx
 
-# Node / Vite
+# Frontend
 node_modules/
 dist/
+*.local
 
-# Secretos: contraseñas y cadenas de conexión NUNCA se suben
+# Entorno
 .env
-appsettings.Local.json
+.env.*
