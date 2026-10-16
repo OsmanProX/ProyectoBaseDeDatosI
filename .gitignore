@@ -1,3 +1,16 @@
+# Backend .NET
 .vs/
+bin/
+obj/
+*.user
+*.suo
 *.vsidx
-*.slnx
+
+# Frontend
+node_modules/
+dist/
+*.local
+
+# Entorno
+.env
+.env.*
