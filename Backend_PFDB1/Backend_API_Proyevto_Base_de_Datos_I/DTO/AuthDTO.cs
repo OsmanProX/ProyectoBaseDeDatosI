@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using Backend_API_Proyevto_Base_de_Datos_I.BD;
 using Backend_API_Proyevto_Base_de_Datos_I.Models;
 using Dapper;
@@ -15,6 +13,9 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             _dbConnectionFactory = dbConexion;
         }
 
+        // Login por correo + contraseña vía sp_LoginUsuario.
+        // El SP compara SHA256 de la contraseña con ContrasenaHash y,
+        // si es exitoso, devuelve los datos del usuario y sus roles.
         public async Task<ResponseDto> Login(LoginRequest request)
         {
             ResponseDto respuesta = new ResponseDto();
@@ -24,39 +25,19 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 {
                     await connection.OpenAsync();
 
-                    string sql = @"
-                        SELECT u.UsuarioId, u.NombreUsuario, u.ContrasenaHash,
-                               u.NombreCompleto, u.Correo, u.Activo,
-                               STUFF((
-                                   SELECT ', ' + r.Nombre
-                                   FROM UsuarioRol ur
-                                   INNER JOIN Rol r ON r.RolId = ur.RolId
-                                   WHERE ur.UsuarioId = u.UsuarioId
-                                   FOR XML PATH(''), TYPE).value('.', 'NVARCHAR(MAX)'), 1, 2, '') AS Roles
-                        FROM Usuario u
-                        WHERE u.NombreUsuario = @Usuario AND u.Activo = 1";
+                    var parameters = new DynamicParameters();
+                    parameters.Add("@Correo", request.Correo);
+                    parameters.Add("@Contrasena", request.Password);
 
                     var usuario = await connection.QueryFirstOrDefaultAsync<VwUsuarioModel>(
-                        sql, new { request.Usuario });
+                        "sp_LoginUsuario", parameters,
+                        commandType: System.Data.CommandType.StoredProcedure);
 
                     if (usuario == null)
                     {
                         respuesta.codigo = 401;
                         respuesta.data = null;
-                        respuesta.mensaje = "Usuario o contrasena incorrectos.";
-                        return respuesta;
-                    }
-
-                    string hashIngresado = CalcularHash(request.Password);
-                    bool contrasenaValida =
-                        string.Equals(hashIngresado, usuario.ContrasenaHash, StringComparison.OrdinalIgnoreCase)
-                        || request.Password == usuario.ContrasenaHash;
-
-                    if (!contrasenaValida)
-                    {
-                        respuesta.codigo = 401;
-                        respuesta.data = null;
-                        respuesta.mensaje = "Usuario o contrasena incorrectos.";
+                        respuesta.mensaje = "Correo o contrasena incorrectos.";
                         return respuesta;
                     }
 
@@ -68,6 +49,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                         usuario.NombreUsuario,
                         usuario.NombreCompleto,
                         usuario.Correo,
+                        usuario.Telefono,
                         Roles = usuario.Roles ?? "SIN_ROL"
                     };
                 }
@@ -82,13 +64,6 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 };
             }
             return respuesta;
-        }
-
-        private static string CalcularHash(string texto)
-        {
-            using var sha = SHA256.Create();
-            byte[] bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(texto));
-            return Convert.ToHexString(bytes);
         }
     }
 }
