@@ -29,7 +29,8 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             _dbConnectionFactory = dbConexion;
         }
 
-        public async Task<ResponseDto> Consultar(int? estadoId, int? clienteId)
+        // Usa sp_ListarOrdenes (script 10): filtra por texto y por código de estado o 'ABIERTAS'.
+        public async Task<ResponseDto> Consultar(string? buscar, string? estado)
         {
             ResponseDto respuesta = new();
             try
@@ -37,36 +38,61 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                string sql = @"
-                    SELECT o.OrdenId, o.NumeroOrden, o.ClienteId,
-                           c.NombreRazonSocial AS NombreCliente,
-                           o.EquipoId,
-                           e.NumeroSerie,
-                           te.Nombre + ' ' + e.Marca + ' ' + e.Modelo AS Equipo,
-                           o.UsuarioRecepcionId,
-                           u.NombreCompleto AS Recepcionista,
-                           o.FechaIngreso, o.ProblemaReportado, o.Prioridad,
-                           o.EstadoOrdenId, eo.Codigo AS Estado,
-                           o.FechaEstimada, o.Observaciones
-                    FROM OrdenServicio o
-                    INNER JOIN Cliente c ON c.ClienteId = o.ClienteId
-                    INNER JOIN Equipo e ON e.EquipoId = o.EquipoId
-                    INNER JOIN TipoEquipo te ON te.TipoEquipoId = e.TipoEquipoId
-                    INNER JOIN EstadoOrden eo ON eo.EstadoOrdenId = o.EstadoOrdenId
-                    INNER JOIN Usuario u ON u.UsuarioId = o.UsuarioRecepcionId
-                    WHERE (@EstadoId IS NULL OR o.EstadoOrdenId = @EstadoId)
-                      AND (@ClienteId IS NULL OR o.ClienteId = @ClienteId)
-                    ORDER BY o.OrdenId DESC";
-
-                var lista = await connection.QueryAsync<OrdenModel>(sql, new { EstadoId = estadoId, ClienteId = clienteId });
+                var lista = await connection.QueryAsync<OrdenListaModel>(
+                    "sp_ListarOrdenes",
+                    new
+                    {
+                        Buscar = string.IsNullOrWhiteSpace(buscar) ? null : buscar.Trim(),
+                        Estado = string.IsNullOrWhiteSpace(estado) ? null : estado.Trim()
+                    },
+                    commandType: System.Data.CommandType.StoredProcedure);
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Operación realizada exitosamente.";
                 respuesta.data = lista.ToList();
             }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "Consultar(): " + ex.Message };
+            }
             catch (Exception ex)
             {
                 respuesta = new ResponseDto { codigo = 500, mensaje = "Consultar(): " + ex.Message };
+            }
+            return respuesta;
+        }
+
+        // Solo el historial de estados de una orden (para la vista de detalle).
+        public async Task<ResponseDto> ConsultarHistorial(int id)
+        {
+            ResponseDto respuesta = new();
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+
+                var historial = await connection.QueryAsync<HistorialOrdenModel>(
+                    @"SELECT h.HistorialId,
+                             ea.Codigo AS EstadoAnterior,
+                             en.Codigo AS EstadoNuevo,
+                             h.FechaCambio,
+                             u.NombreCompleto AS Usuario,
+                             h.Observacion
+                      FROM HistorialEstadoOrden h
+                      INNER JOIN EstadoOrden en ON en.EstadoOrdenId = h.EstadoNuevoId
+                      LEFT JOIN EstadoOrden ea ON ea.EstadoOrdenId = h.EstadoAnteriorId
+                      INNER JOIN Usuario u ON u.UsuarioId = h.UsuarioId
+                      WHERE h.OrdenId = @Id
+                      ORDER BY h.HistorialId",
+                    new { Id = id });
+
+                respuesta.codigo = 200;
+                respuesta.mensaje = "Operación realizada exitosamente.";
+                respuesta.data = historial.ToList();
+            }
+            catch (Exception ex)
+            {
+                respuesta = new ResponseDto { codigo = 500, mensaje = "ConsultarHistorial(): " + ex.Message };
             }
             return respuesta;
         }

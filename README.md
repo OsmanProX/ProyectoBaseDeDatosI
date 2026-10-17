@@ -35,8 +35,16 @@ El frontend **nunca** se conecta directo a SQL Server; todo pasa por la API.
 ├── database/                scripts SQL (se ejecutan en orden)
 │   ├── 01_tablas.sql             27 tablas con PK, FK, UNIQUE, DEFAULT y CHECK
 │   ├── 02_datos_iniciales.sql    catálogos, usuarios y datos de prueba
-│   ├── 03_procedimientos.sql     sp_RegistrarOrden y sp_CambiarEstadoOrden
-│   └── 03_pruebas_procedimientos.sql  pruebas de los procedimientos
+│   ├── 03_procedimientos.sql     sp_RegistrarOrden, sp_CambiarEstadoOrden y sp_LoginUsuario
+│   ├── 04_procesos.sql           diagnóstico, reparación, repuestos y compras
+│   ├── 05_datos_prueba.sql       datos de prueba con los mínimos del enunciado
+│   ├── 06_facturacion.sql        facturación, pagos y entrega
+│   ├── 07_triggers_indices_reportes.sql  triggers, índices y reportes
+│   ├── 08_permisos.sql           tabla Permiso (menú y acciones por rol)
+│   ├── 09_clientes_equipos_ordenes.sql   vistas y SP para crear clientes y equipos
+│   ├── 10_sp_orden_usuario.sql   listado de órdenes y de usuarios
+│   ├── 11_sp_cliente_equipo.sql  listar, actualizar y desactivar clientes y equipos
+│   └── 0X_pruebas_*.sql          pruebas de cada script
 ├── Backend_PFDB1/           API en ASP.NET Core
 ├── Frontend_PFDB1/          interfaz en Vue
 ├── docs/                    ER, arquitectura, flujos, normalización y manuales
@@ -65,8 +73,10 @@ Conectarse a `localhost,1441` con el usuario `sa` y ejecutar **en orden**:
 
 1. `database/01_tablas.sql` → quitar el `--` de las líneas 8 a 11 (crean la base `TechCare`) y ejecutar todo. Debe mostrar **27 tablas**.
 2. `database/02_datos_iniciales.sql` → quitar el `--` de `USE TechCare;` y ejecutar todo.
-3. `database/03_procedimientos.sql` → igual que el anterior.
-4. (Opcional) `database/03_pruebas_procedimientos.sql` → prueba los procedimientos.
+3. `database/08_permisos.sql` → **va antes del 03**, porque `sp_LoginUsuario` usa la tabla `Permiso`.
+4. `database/03_procedimientos.sql`, `04_procesos.sql`, `05_datos_prueba.sql`, `06_facturacion.sql` y `07_triggers_indices_reportes.sql`, en ese orden.
+5. `database/09_clientes_equipos_ordenes.sql`, `10_sp_orden_usuario.sql` y `11_sp_cliente_equipo.sql`, en ese orden.
+6. (Opcional) pruebas: `06_pruebas_facturacion.sql` y `07_pruebas_reportes.sql` (necesitan los datos del 05).
 
 > En SmarterASP (nube) se dejan esas líneas y el `USE` comentados: se selecciona la base `db_acf53d_dbfinal2026` y se ejecuta todo.
 
@@ -81,13 +91,14 @@ dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Server=localhost,
 dotnet run
 ```
 
-- Swagger: http://localhost:5245/swagger
-- Prueba de conexión: `GET http://localhost:5245/api/test/conexion` → debe responder `"conectado": true`
+- Swagger: http://localhost:5247/swagger
+- Prueba de conexión: `GET http://localhost:5247/api/test/conexion` → debe responder `"conectado": true`
 
 ### 3. Frontend
 
 ```bash
 cd Frontend_PFDB1
+cp .env.example .env   # en Windows: copy .env.example .env  (VITE_API_BASE_URL=http://localhost:5247)
 bun install        # o: npm install
 bun run dev        # o: npm run dev
 ```

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Backend_API_Proyevto_Base_de_Datos_I.BD;
 using Backend_API_Proyevto_Base_de_Datos_I.Models;
 using Dapper;
+using Microsoft.Data.SqlClient;
 
 namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
 {
@@ -32,6 +33,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             _dbConnectionFactory = dbConexion;
         }
 
+        // Usa sp_Cliente_Listar (script 11): filtra por nombre/NIT desde vw_Cliente.
         public async Task<ResponseDto> Consultar(string? busqueda)
         {
             ResponseDto respuesta = new();
@@ -40,20 +42,14 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                string sql = @"
-                    SELECT ClienteId, TipoCliente, NombreRazonSocial, NIT, Telefono,
-                           Correo, Direccion, Estado, FechaRegistro
-                    FROM Cliente
-                    WHERE (@Busqueda IS NULL
-                           OR NombreRazonSocial LIKE @Patron
-                           OR NIT LIKE @Patron)
-                    ORDER BY ClienteId";
-
-                var lista = await connection.QueryAsync<ClienteModel>(sql, new
-                {
-                    Busqueda = string.IsNullOrWhiteSpace(busqueda) ? null : busqueda,
-                    Patron = $"%{busqueda}%"
-                });
+                var lista = await connection.QueryAsync<ClienteModel>(
+                    "sp_Cliente_Listar",
+                    new
+                    {
+                        Buscar = string.IsNullOrWhiteSpace(busqueda) ? null : busqueda.Trim(),
+                        Estado = (string?)null
+                    },
+                    commandType: System.Data.CommandType.StoredProcedure);
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Operación realizada exitosamente.";
@@ -62,6 +58,33 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             catch (Exception ex)
             {
                 respuesta = new ResponseDto { codigo = 500, mensaje = "Consultar(): " + ex.Message };
+            }
+            return respuesta;
+        }
+
+        // Equipos ACTIVOS de un cliente (para el formulario de nueva orden). Usa vw_Equipo.
+        public async Task<ResponseDto> ConsultarEquipos(int id)
+        {
+            ResponseDto respuesta = new();
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+
+                var lista = await connection.QueryAsync<EquipoDeClienteModel>(
+                    @"SELECT EquipoId, TipoEquipo, Marca, Modelo, NumeroSerie
+                      FROM vw_Equipo
+                      WHERE ClienteId = @Id AND Estado = 'ACTIVO'
+                      ORDER BY EquipoId",
+                    new { Id = id });
+
+                respuesta.codigo = 200;
+                respuesta.mensaje = "Operación realizada exitosamente.";
+                respuesta.data = lista.ToList();
+            }
+            catch (Exception ex)
+            {
+                respuesta = new ResponseDto { codigo = 500, mensaje = "ConsultarEquipos(): " + ex.Message };
             }
             return respuesta;
         }
@@ -98,50 +121,46 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             return respuesta;
         }
 
+        // Usa sp_Cliente_Crear (script 09): valida tipo, nombre y NIT único (50301-50304).
         public async Task<ResponseDto> Crear()
         {
             ResponseDto respuesta = new();
             try
             {
-                if (TipoCliente is not ("INDIVIDUAL" or "EMPRESARIAL"))
-                {
-                    respuesta.codigo = 400;
-                    respuesta.mensaje = "TipoCliente debe ser INDIVIDUAL o EMPRESARIAL.";
-                    return respuesta;
-                }
-
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                int nuevoId = await connection.ExecuteScalarAsync<int>(@"
-                    INSERT INTO Cliente (TipoCliente, NombreRazonSocial, NIT, Telefono, Correo, Direccion)
-                    VALUES (@TipoCliente, @NombreRazonSocial, @NIT, @Telefono, @Correo, @Direccion);
-                    SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                    new
-                    {
-                        TipoCliente,
-                        NombreRazonSocial,
-                        NIT,
-                        Telefono,
-                        Correo,
-                        Direccion
-                    });
+                var parameters = new DynamicParameters();
+                parameters.Add("@TipoCliente", TipoCliente);
+                parameters.Add("@NombreRazonSocial", NombreRazonSocial);
+                parameters.Add("@NIT", NIT);
+                parameters.Add("@Telefono", Telefono);
+                parameters.Add("@Correo", Correo);
+                parameters.Add("@Direccion", Direccion);
+                parameters.Add("@ClienteId", dbType: System.Data.DbType.Int32, direction: System.Data.ParameterDirection.Output);
 
-                ClienteId = nuevoId;
+                await connection.ExecuteAsync(
+                    "sp_Cliente_Crear", parameters,
+                    commandType: System.Data.CommandType.StoredProcedure);
+
+                ClienteId = parameters.Get<int>("@ClienteId");
+
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Cliente registrado exitosamente.";
-                respuesta.data = new { ClienteId = nuevoId };
+                respuesta.data = new { ClienteId };
+            }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "Crear(): " + ex.Message };
             }
             catch (Exception ex)
             {
-                string mensaje = ex.Message.Contains("UX_Cliente_NIT") || ex.Message.Contains("duplicate")
-                    ? "Ya existe un cliente con ese NIT."
-                    : ex.Message;
-                respuesta = new ResponseDto { codigo = 500, mensaje = "Crear(): " + mensaje };
+                respuesta = new ResponseDto { codigo = 500, mensaje = "Crear(): " + ex.Message };
             }
             return respuesta;
         }
 
+        // Usa sp_Cliente_Actualizar (script 11): valida existencia, tipo y NIT único (51101-51105).
         public async Task<ResponseDto> Actualizar()
         {
             ResponseDto respuesta = new();
@@ -153,57 +172,38 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                     respuesta.mensaje = "ClienteId es obligatorio.";
                     return respuesta;
                 }
-                if (TipoCliente is not ("INDIVIDUAL" or "EMPRESARIAL"))
-                {
-                    respuesta.codigo = 400;
-                    respuesta.mensaje = "TipoCliente debe ser INDIVIDUAL o EMPRESARIAL.";
-                    return respuesta;
-                }
 
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                int filas = await connection.ExecuteAsync(@"
-                    UPDATE Cliente
-                    SET TipoCliente = @TipoCliente,
-                        NombreRazonSocial = @NombreRazonSocial,
-                        NIT = @NIT,
-                        Telefono = @Telefono,
-                        Correo = @Correo,
-                        Direccion = @Direccion
-                    WHERE ClienteId = @ClienteId",
-                    new
-                    {
-                        ClienteId,
-                        TipoCliente,
-                        NombreRazonSocial,
-                        NIT,
-                        Telefono,
-                        Correo,
-                        Direccion
-                    });
+                var parameters = new DynamicParameters();
+                parameters.Add("@ClienteId", ClienteId);
+                parameters.Add("@TipoCliente", TipoCliente);
+                parameters.Add("@NombreRazonSocial", NombreRazonSocial);
+                parameters.Add("@NIT", NIT);
+                parameters.Add("@Telefono", Telefono);
+                parameters.Add("@Correo", Correo);
+                parameters.Add("@Direccion", Direccion);
 
-                if (filas == 0)
-                {
-                    respuesta.codigo = 404;
-                    respuesta.mensaje = "Cliente no encontrado.";
-                    return respuesta;
-                }
+                await connection.ExecuteAsync(
+                    "sp_Cliente_Actualizar", parameters,
+                    commandType: System.Data.CommandType.StoredProcedure);
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Cliente actualizado exitosamente.";
             }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "Actualizar(): " + ex.Message };
+            }
             catch (Exception ex)
             {
-                string mensaje = ex.Message.Contains("UX_Cliente_NIT") || ex.Message.Contains("duplicate")
-                    ? "Ya existe otro cliente con ese NIT."
-                    : ex.Message;
-                respuesta = new ResponseDto { codigo = 500, mensaje = "Actualizar(): " + mensaje };
+                respuesta = new ResponseDto { codigo = 500, mensaje = "Actualizar(): " + ex.Message };
             }
             return respuesta;
         }
 
-        // Borrado lógico: el cliente pasa a INACTIVO para no romper órdenes e historial.
+        // Borrado lógico con sp_Cliente_Eliminar (script 11): no inactiva si tiene órdenes abiertas (51112).
         public async Task<ResponseDto> Eliminar(int id)
         {
             ResponseDto respuesta = new();
@@ -212,19 +212,17 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                int filas = await connection.ExecuteAsync(
-                    "UPDATE Cliente SET Estado = 'INACTIVO' WHERE ClienteId = @Id",
-                    new { Id = id });
-
-                if (filas == 0)
-                {
-                    respuesta.codigo = 404;
-                    respuesta.mensaje = "Cliente no encontrado.";
-                    return respuesta;
-                }
+                await connection.ExecuteAsync(
+                    "sp_Cliente_Eliminar",
+                    new { ClienteId = id },
+                    commandType: System.Data.CommandType.StoredProcedure);
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Cliente desactivado exitosamente.";
+            }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "Eliminar(): " + ex.Message };
             }
             catch (Exception ex)
             {

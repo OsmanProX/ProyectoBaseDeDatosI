@@ -14,7 +14,7 @@ No CI, no tests, no lint/typecheck scripts exist. Verify backend with `dotnet bu
 ```bash
 # Backend (must run from Backend_PFDB1/Backend_API_Proyevto_Base_de_Datos_I)
 dotnet build
-dotnet run   # profile "http": http://localhost:5245, Swagger at /swagger
+dotnet run   # profile "http": http://localhost:5247, Swagger at /swagger
 
 # Frontend (from Frontend_PFDB1)
 bun run dev      # Vite dev server (default port 5173)

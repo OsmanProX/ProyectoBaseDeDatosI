@@ -35,12 +35,31 @@ builder.Services
         };
     });
 
-builder.Services.AddAuthorization();
+// Políticas de autorización por rol (el JWT trae el rol como claim role).
+// Mapa de roles según 08_permisos.sql:
+//   ADMINISTRADOR y RECEPCION: ver, crear y cambiar estado de órdenes
+//   TECNICO: ver y cambiar estado
+//   BODEGA y CAJA: solo ver
+builder.Services.AddAuthorization(options =>
+{
+    options.AddPolicy("VerOrdenes",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION", "TECNICO", "BODEGA", "CAJA"));
+    options.AddPolicy("CrearOrdenes",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
+    options.AddPolicy("CambiarEstadoOrden",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION", "TECNICO"));
+    // Clientes y equipos: se registran/actualizan en recepción (ADMINISTRADOR, RECEPCION)
+    options.AddPolicy("GestionarClientes",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
+    options.AddPolicy("GestionarEquipos",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
+});
 
 // CORS: permite llamar a la API desde el frontend Vue en desarrollo
+// (Vite escucha en 127.0.0.1 y localhost; para el navegador son orígenes distintos)
 builder.Services.AddCors(options =>
     options.AddPolicy("Frontend", policy =>
-        policy.WithOrigins("http://localhost:5173")
+        policy.WithOrigins("http://localhost:5173", "http://127.0.0.1:5173")
               .AllowAnyHeader()
               .AllowAnyMethod()));
 

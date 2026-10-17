@@ -1,7 +1,9 @@
 /// <reference types="vite/client" />
+/// <reference types="vitest/globals" />
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
-  const component: DefineComponent<object, object, unknown>
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const component: DefineComponent<Record<string, unknown>, Record<string, unknown>, unknown>
   export default component
 }

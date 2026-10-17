@@ -5,6 +5,8 @@ obj/
 *.user
 *.suo
 *.vsidx
+err.txt
+out.txt
 
 # Frontend
 node_modules/
