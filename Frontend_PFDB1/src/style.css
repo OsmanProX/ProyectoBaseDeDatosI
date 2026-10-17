@@ -1,9 +1,0 @@
-/* Estilos globales minimos (reemplaza la plantilla de Vite) */
-:root {
-  font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
-  color: #222b38;
-  background: #fff;
-  color-scheme: light;
-}
-body { margin: 0; }
-#app { width: 100%; }

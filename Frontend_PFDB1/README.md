@@ -1,5 +1,16 @@
-# Vue 3 + TypeScript + Vite
+# Frontend La Florida — plantilla de clase
 
-This template should help get you started developing with Vue 3 and TypeScript in Vite. The template uses Vue 3 `<script setup>` SFCs, check out the [script setup docs](https://v3.vuejs.org/api/sfc-script-setup.html#sfc-script-setup) to learn more.
+Proyecto base en Vue 3 para construir los módulos administrativos durante la clase. Incluye la
+configuración técnica, el layout, la navegación, el tema claro/oscuro y la página de inicio. No
+incluye módulos de negocio.
 
-Learn more about the recommended Project Setup and IDE Support in the [Vue Docs TypeScript Guide](https://vuejs.org/guide/typescript/overview.html#project-setup).
+## Ejecutar
+
+```bash
+npm install
+copy .env.example .env
+npm run dev
+```
+
+La guía `GUIA_CLASE_FRONTEND_USUARIOS.txt`, ubicada junto a esta carpeta, explica cómo construir
+el primer módulo usando el proyecto funcional como referencia.

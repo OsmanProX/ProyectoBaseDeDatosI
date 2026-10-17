@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "Grupo1BD1"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
       TZ: "America/Guatemala"
     ports:
       - "1441:1433"
