@@ -1,4 +1,4 @@
-using Backend_API_Proyevto_Base_de_Datos_I.BD;
+﻿using Backend_API_Proyevto_Base_de_Datos_I.BD;
 using Backend_API_Proyevto_Base_de_Datos_I.DTO;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -18,6 +18,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/equipo?clienteId=1
+        [Authorize(Policy = "GestionarEquipos")]
         [HttpGet]
         public async Task<IActionResult> Consultar([FromQuery] int? clienteId)
         {
@@ -35,6 +36,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/equipo/5
+        [Authorize(Policy = "GestionarEquipos")]
         [HttpGet("{id:int}")]
         public async Task<IActionResult> ConsultarPorId(int id)
         {
@@ -52,6 +54,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/equipo/tipos
+        [Authorize(Policy = "GestionarEquipos")]
         [HttpGet("tipos")]
         public async Task<IActionResult> ConsultarTipos()
         {
@@ -69,6 +72,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // POST: api/equipo/crear
+        [Authorize(Policy = "GestionarEquipos")]
         [HttpPost("crear")]
         public async Task<IActionResult> Crear([FromBody] EquipoDTO request)
         {
@@ -90,6 +94,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // PUT: api/equipo/actualizar
+        [Authorize(Policy = "GestionarEquipos")]
         [HttpPut("actualizar")]
         public async Task<IActionResult> Actualizar([FromBody] EquipoDTO request)
         {
@@ -111,6 +116,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // DELETE: api/equipo/eliminar/5  (borrado lógico; rechaza si tiene órdenes)
+        [Authorize(Policy = "GestionarEquipos")]
         [HttpDelete("eliminar/{id:int}")]
         public async Task<IActionResult> Eliminar(int id)
         {

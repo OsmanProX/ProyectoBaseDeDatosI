@@ -1,5 +1,7 @@
 import {
   ClipboardList,
+  Contact,
+  Laptop,
   LayoutDashboard,
   Users,
   ShieldCheck,
@@ -13,6 +15,8 @@ import {
 } from 'lucide-vue-next'
 export const iconRegistry = {
   ClipboardList,
+  Contact,
+  Laptop,
   LayoutDashboard,
   Users,
   ShieldCheck,
@@ -28,6 +32,8 @@ export type IconName = keyof typeof iconRegistry
 
 const iconLabels: Record<IconName, string> = {
   ClipboardList: 'Órdenes',
+  Contact: 'Clientes',
+  Laptop: 'Equipos',
   LayoutDashboard: 'Panel',
   Users: 'Usuarios',
   ShieldCheck: 'Seguridad',

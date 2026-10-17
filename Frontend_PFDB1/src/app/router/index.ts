@@ -6,9 +6,11 @@ declare module 'vue-router' {
   interface RouteMeta {
     title: string
     requiresAuth?: boolean
-    /** Código de permiso requerido (tabla Permiso), p. ej. VER_USUARIOS */
-    permiso?: string
-  }
+  /** Código de permiso requerido (tabla Permiso), p. ej. VER_USUARIOS */
+  permiso?: string
+  /** Roles con acceso directo (alternativa cuando el módulo no depende de la tabla Permiso) */
+  roles?: string[]
+}
 }
 
 const routes: RouteRecordRaw[] = [
@@ -41,6 +43,18 @@ const routes: RouteRecordRaw[] = [
         name: 'ordenes',
         component: () => import('@/features/ordenes/views/OrdenesView.vue'),
         meta: { title: 'Órdenes', requiresAuth: true, permiso: 'VER_ORDENES' },
+      },
+      {
+        path: 'clientes',
+        name: 'clientes',
+        component: () => import('@/features/clientes/views/ClientesListView.vue'),
+        meta: { title: 'Clientes', requiresAuth: true, roles: ['ADMINISTRADOR', 'RECEPCION'] },
+      },
+      {
+        path: 'equipos',
+        name: 'equipos',
+        component: () => import('@/features/equipos/views/EquiposListView.vue'),
+        meta: { title: 'Equipos', requiresAuth: true, roles: ['ADMINISTRADOR', 'RECEPCION'] },
       },
       {
         path: 'usuarios',
@@ -84,6 +98,11 @@ router.beforeEach((to) => {
 
   // Control de permisos por rol (tabla Permiso)
   if (to.meta.permiso && !auth.tienePermiso(to.meta.permiso)) {
+    return { name: 'acceso-denegado' }
+  }
+
+  // Módulos bloqueados por rol (mismos roles que las policies del backend)
+  if (to.meta.roles && !to.meta.roles.includes(auth.rol)) {
     return { name: 'acceso-denegado' }
   }
 

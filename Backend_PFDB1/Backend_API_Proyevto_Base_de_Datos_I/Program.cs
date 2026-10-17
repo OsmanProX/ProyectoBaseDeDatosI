@@ -48,6 +48,11 @@ builder.Services.AddAuthorization(options =>
         p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
     options.AddPolicy("CambiarEstadoOrden",
         p => p.RequireRole("ADMINISTRADOR", "RECEPCION", "TECNICO"));
+    // Clientes y equipos: se registran/actualizan en recepción (ADMINISTRADOR, RECEPCION)
+    options.AddPolicy("GestionarClientes",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
+    options.AddPolicy("GestionarEquipos",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
 });
 
 // CORS: permite llamar a la API desde el frontend Vue en desarrollo

@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 using Backend_API_Proyevto_Base_de_Datos_I.BD;
 using Backend_API_Proyevto_Base_de_Datos_I.Models;
 using Dapper;
+using Microsoft.Data.SqlClient;
 
 namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
 {
@@ -34,6 +35,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             _dbConnectionFactory = dbConexion;
         }
 
+        // Usa sp_Equipo_Listar (script 11): lista desde vw_Equipo por cliente/texto.
         public async Task<ResponseDto> Consultar(int? clienteId)
         {
             ResponseDto respuesta = new();
@@ -42,18 +44,10 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                string sql = @"
-                    SELECT e.EquipoId, e.ClienteId, e.TipoEquipoId,
-                           te.Nombre AS NombreTipoEquipo,
-                           c.NombreRazonSocial AS NombreCliente,
-                           e.Marca, e.Modelo, e.NumeroSerie, e.Descripcion, e.Estado
-                    FROM Equipo e
-                    INNER JOIN TipoEquipo te ON te.TipoEquipoId = e.TipoEquipoId
-                    INNER JOIN Cliente c ON c.ClienteId = e.ClienteId
-                    WHERE (@ClienteId IS NULL OR e.ClienteId = @ClienteId)
-                    ORDER BY e.EquipoId";
-
-                var lista = await connection.QueryAsync<EquipoModel>(sql, new { ClienteId = clienteId });
+                var lista = await connection.QueryAsync<EquipoModel>(
+                    "sp_Equipo_Listar",
+                    new { ClienteId = clienteId, Buscar = (string?)null, SoloActivos = false },
+                    commandType: System.Data.CommandType.StoredProcedure);
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Operación realizada exitosamente.";
@@ -103,6 +97,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             return respuesta;
         }
 
+        // Usa sp_Equipo_Crear (script 09): valida cliente activo (50311), tipo (50312) y serie única (50313/50314).
         public async Task<ResponseDto> Crear()
         {
             ResponseDto respuesta = new();
@@ -111,47 +106,37 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                int clienteExiste = await connection.ExecuteScalarAsync<int>(
-                    "SELECT COUNT(1) FROM Cliente WHERE ClienteId = @Id AND Estado = 'ACTIVO'",
-                    new { Id = ClienteId });
-                if (clienteExiste == 0)
-                {
-                    respuesta.codigo = 400;
-                    respuesta.mensaje = "El cliente no existe o está inactivo.";
-                    return respuesta;
-                }
+                var parameters = new DynamicParameters();
+                parameters.Add("@ClienteId", ClienteId);
+                parameters.Add("@TipoEquipoId", TipoEquipoId);
+                parameters.Add("@Marca", Marca);
+                parameters.Add("@Modelo", Modelo);
+                parameters.Add("@NumeroSerie", NumeroSerie);
+                parameters.Add("@Descripcion", Descripcion);
+                parameters.Add("@EquipoId", dbType: System.Data.DbType.Int32, direction: System.Data.ParameterDirection.Output);
 
-                int tipoExiste = await connection.ExecuteScalarAsync<int>(
-                    "SELECT COUNT(1) FROM TipoEquipo WHERE TipoEquipoId = @Id",
-                    new { Id = TipoEquipoId });
-                if (tipoExiste == 0)
-                {
-                    respuesta.codigo = 400;
-                    respuesta.mensaje = "El tipo de equipo no existe.";
-                    return respuesta;
-                }
+                await connection.ExecuteAsync(
+                    "sp_Equipo_Crear", parameters,
+                    commandType: System.Data.CommandType.StoredProcedure);
 
-                int nuevoId = await connection.ExecuteScalarAsync<int>(@"
-                    INSERT INTO Equipo (ClienteId, TipoEquipoId, Marca, Modelo, NumeroSerie, Descripcion)
-                    VALUES (@ClienteId, @TipoEquipoId, @Marca, @Modelo, @NumeroSerie, @Descripcion);
-                    SELECT CAST(SCOPE_IDENTITY() AS INT);",
-                    new { ClienteId, TipoEquipoId, Marca, Modelo, NumeroSerie, Descripcion });
+                EquipoId = parameters.Get<int>("@EquipoId");
 
-                EquipoId = nuevoId;
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Equipo registrado exitosamente.";
-                respuesta.data = new { EquipoId = nuevoId };
+                respuesta.data = new { EquipoId };
+            }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "Crear(): " + ex.Message };
             }
             catch (Exception ex)
             {
-                string mensaje = ex.Message.Contains("UNIQUE") || ex.Message.Contains("duplicate")
-                    ? "Ya existe un equipo con ese número de serie."
-                    : ex.Message;
-                respuesta = new ResponseDto { codigo = 500, mensaje = "Crear(): " + mensaje };
+                respuesta = new ResponseDto { codigo = 500, mensaje = "Crear(): " + ex.Message };
             }
             return respuesta;
         }
 
+        // Usa sp_Equipo_Actualizar (script 11): valida existencia, cliente activo, tipo y serie única (51121-51125).
         public async Task<ResponseDto> Actualizar()
         {
             ResponseDto respuesta = new();
@@ -167,24 +152,25 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                int filas = await connection.ExecuteAsync(@"
-                    UPDATE Equipo
-                    SET TipoEquipoId = @TipoEquipoId,
-                        Marca = @Marca,
-                        Modelo = @Modelo,
-                        Descripcion = @Descripcion
-                    WHERE EquipoId = @EquipoId",
-                    new { EquipoId, TipoEquipoId, Marca, Modelo, Descripcion });
+                var parameters = new DynamicParameters();
+                parameters.Add("@EquipoId", EquipoId);
+                parameters.Add("@ClienteId", ClienteId);
+                parameters.Add("@TipoEquipoId", TipoEquipoId);
+                parameters.Add("@Marca", Marca);
+                parameters.Add("@Modelo", Modelo);
+                parameters.Add("@NumeroSerie", NumeroSerie);
+                parameters.Add("@Descripcion", Descripcion);
 
-                if (filas == 0)
-                {
-                    respuesta.codigo = 404;
-                    respuesta.mensaje = "Equipo no encontrado.";
-                    return respuesta;
-                }
+                await connection.ExecuteAsync(
+                    "sp_Equipo_Actualizar", parameters,
+                    commandType: System.Data.CommandType.StoredProcedure);
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Equipo actualizado exitosamente.";
+            }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "Actualizar(): " + ex.Message };
             }
             catch (Exception ex)
             {
@@ -193,7 +179,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             return respuesta;
         }
 
-        // Borrado lógico: no se borra si tiene órdenes asociadas.
+        // Borrado lógico con sp_Equipo_Eliminar (script 11): no inactiva si tiene órdenes abiertas (51132).
         public async Task<ResponseDto> Eliminar(int id)
         {
             ResponseDto respuesta = new();
@@ -202,29 +188,17 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
 
-                int conOrdenes = await connection.ExecuteScalarAsync<int>(
-                    "SELECT COUNT(1) FROM OrdenServicio WHERE EquipoId = @Id",
-                    new { Id = id });
-                if (conOrdenes > 0)
-                {
-                    respuesta.codigo = 400;
-                    respuesta.mensaje = "El equipo tiene órdenes de servicio asociadas; no se puede desactivar.";
-                    return respuesta;
-                }
-
-                int filas = await connection.ExecuteAsync(
-                    "UPDATE Equipo SET Estado = 'INACTIVO' WHERE EquipoId = @Id",
-                    new { Id = id });
-
-                if (filas == 0)
-                {
-                    respuesta.codigo = 404;
-                    respuesta.mensaje = "Equipo no encontrado.";
-                    return respuesta;
-                }
+                await connection.ExecuteAsync(
+                    "sp_Equipo_Eliminar",
+                    new { EquipoId = id },
+                    commandType: System.Data.CommandType.StoredProcedure);
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Equipo desactivado exitosamente.";
+            }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "Eliminar(): " + ex.Message };
             }
             catch (Exception ex)
             {

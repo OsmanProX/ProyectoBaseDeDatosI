@@ -18,6 +18,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/cliente?busqueda=juan
+        [Authorize(Policy = "GestionarClientes")]
         [HttpGet]
         public async Task<IActionResult> Consultar([FromQuery] string? busqueda)
         {
@@ -35,6 +36,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/cliente/5
+        [Authorize(Policy = "GestionarClientes")]
         [HttpGet("{id:int}")]
         public async Task<IActionResult> ConsultarPorId(int id)
         {
@@ -52,6 +54,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/cliente/5/equipos  (equipos activos del cliente, para nueva orden)
+        [Authorize(Policy = "GestionarClientes")]
         [HttpGet("{id:int}/equipos")]
         public async Task<IActionResult> ConsultarEquipos(int id)
         {
@@ -69,6 +72,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // POST: api/cliente/crear
+        [Authorize(Policy = "GestionarClientes")]
         [HttpPost("crear")]
         public async Task<IActionResult> Crear([FromBody] ClienteDTO request)
         {
@@ -90,6 +94,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // PUT: api/cliente/actualizar
+        [Authorize(Policy = "GestionarClientes")]
         [HttpPut("actualizar")]
         public async Task<IActionResult> Actualizar([FromBody] ClienteDTO request)
         {
@@ -111,6 +116,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // DELETE: api/cliente/eliminar/5  (borrado lógico: Estado = INACTIVO)
+        [Authorize(Policy = "GestionarClientes")]
         [HttpDelete("eliminar/{id:int}")]
         public async Task<IActionResult> Eliminar(int id)
         {

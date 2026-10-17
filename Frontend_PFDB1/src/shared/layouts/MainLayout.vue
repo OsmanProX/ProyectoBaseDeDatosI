@@ -25,10 +25,13 @@ const auth = useAuthStore()
 const collapsed = ref(false)
 const mobileOpen = ref(false)
 const title = computed(() => String(route.meta.title ?? 'Inicio'))
-
-// Menú filtrado por los permisos del usuario (tabla Permiso vía /api/Permiso/mios)
+// Menú filtrado por permisos (tabla Permiso vía /api/Permiso/mios) y por rol
 const navItems = computed(() =>
-  staticNavigation.filter((item) => !item.permiso || auth.tienePermiso(item.permiso)))
+  staticNavigation.filter(
+    (item) =>
+      (!item.permiso || auth.tienePermiso(item.permiso)) &&
+      (!item.roles || item.roles.includes(auth.rol)),
+  ))
 
 function cerrarSesion() {
   auth.logout()
