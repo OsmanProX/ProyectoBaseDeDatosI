@@ -230,6 +230,7 @@ GO
    Si es exitoso devuelve los datos del usuario, sus roles
    y sus permisos activos (regla: cada usuario solo ve y
    ejecuta las opciones de su rol); si falla devuelve 0 filas.
+   Usa la tabla Permiso: correr 08_permisos.sql antes de usarlo.
    ========================================================== */
 CREATE OR ALTER PROCEDURE dbo.sp_LoginUsuario
     @Correo     VARCHAR(100),
@@ -259,7 +260,7 @@ BEGIN
     FROM Usuario u
     WHERE u.Correo = @Correo
       AND u.Activo = 1
-      AND (u.ContrasenaHash = @Hash OR u.ContrasenaHash = @Contrasena);
+      AND u.ContrasenaHash = @Hash;
 END;
 GO
 

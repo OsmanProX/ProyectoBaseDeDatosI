@@ -192,4 +192,34 @@ tr:last-child td {
   background: #ffebee;
   color: #b1303a;
 }
+
+/* Modo oscuro de la plantilla (sigue al tema de Windows o al botón sol/luna) */
+:root.dark .cabecera h1 {
+  color: #c7d2fe;
+}
+
+:root.dark .sub,
+:root.dark .num,
+:root.dark .vacio {
+  color: #a3b2c9;
+}
+
+:root.dark .tabla-wrap {
+  background: rgb(18 27 46);
+  border-color: rgb(43 56 78);
+}
+
+:root.dark th {
+  background: rgb(24 36 60);
+  color: #c7d2fe;
+}
+
+:root.dark td {
+  color: #e2e8f0;
+  border-bottom-color: rgb(43 56 78);
+}
+
+:root.dark .fuerte {
+  color: #f1f5f9;
+}
 </style>

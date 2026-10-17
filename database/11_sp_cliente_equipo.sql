@@ -77,7 +77,8 @@ BEGIN
         IF @NIT IS NULL OR LTRIM(RTRIM(@NIT)) = ''
             THROW 51104, 'El NIT es obligatorio.', 1;
 
-        IF EXISTS (SELECT 1 FROM dbo.Cliente WHERE NIT = @NIT AND ClienteId <> @ClienteId)
+        -- CF (consumidor final) se puede repetir: el índice UX_Cliente_NIT lo excluye
+        IF @NIT <> 'CF' AND EXISTS (SELECT 1 FROM dbo.Cliente WHERE NIT = @NIT AND ClienteId <> @ClienteId)
             THROW 51105, 'Ya existe otro cliente con ese NIT.', 1;
 
         UPDATE dbo.Cliente

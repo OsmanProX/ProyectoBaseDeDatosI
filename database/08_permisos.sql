@@ -2,7 +2,8 @@
    Proyecto Final - Base de Datos I (UMG)
    TechCare Solutions
    Script 08: permisos por rol + vista
-   Se ejecuta después del 01 y 02
+   Se ejecuta después del 01 y 02, y ANTES del 03
+   (sp_LoginUsuario lee la tabla Permiso)
    ========================================================== */
 
 -- Solo en Docker (en SmarterASP se deja comentado)

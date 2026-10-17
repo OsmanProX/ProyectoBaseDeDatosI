@@ -1,74 +1,168 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { env } from '@/core/config/env'
+// Pantalla de equipos: listado, registro, edición y desactivación.
+// Acceso: ADMINISTRADOR y RECEPCION (menú, router y policy GestionarEquipos del backend).
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useAuthStore } from '@/features/auth/stores/auth.store'
+import {
+  equiposApi,
+  type Equipo, type TipoEquipo, type ClienteOpcion, type DatosEquipo,
+} from '../api/equipos'
 
-interface EquipoFila {
-  equipoId: number
-  clienteId: number
-  nombreCliente: string | null
-  nombreTipoEquipo: string | null
-  marca: string
-  modelo: string
-  numeroSerie: string
-  estado: string
-}
+const auth = useAuthStore()
+// Mismos roles que la policy del backend (Program.cs)
+const puedeEditar = computed(() => ['ADMINISTRADOR', 'RECEPCION'].includes(auth.rol))
 
-interface OpcionCliente {
-  clienteId: number
-  nombreRazonSocial: string
-  estado: string
-}
+// ---------- catálogos ----------
+const tipos = ref<TipoEquipo[]>([])
+const clientes = ref<ClienteOpcion[]>([])
+const clientesActivos = computed(() => clientes.value.filter((c) => c.estado === 'ACTIVO'))
 
-const BASE = env.VITE_API_BASE_URL
-
-const equipos = ref<EquipoFila[]>([])
-const clientes = ref<OpcionCliente[]>([])
-const clienteId = ref('')
+// ---------- listado ----------
+const equipos = ref<Equipo[]>([])
 const cargando = ref(false)
-const error = ref('')
+const errorLista = ref('')
+const aviso = ref('')
+const buscar = ref('')
+const filtroCliente = ref(0)
+const filtroEstado = ref<'ACTIVO' | 'INACTIVO' | ''>('ACTIVO')
 
-async function cargarEquipos() {
+async function cargar() {
   cargando.value = true
-  error.value = ''
+  errorLista.value = ''
   try {
-    const token = sessionStorage.getItem('token')
-    const q = new URLSearchParams()
-    if (clienteId.value) q.set('clienteId', clienteId.value)
-    const res = await fetch(`${BASE}/api/Equipo?${q.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const data = await res.json()
-    if (data.codigo === 200) {
-      equipos.value = data.data
-    } else {
-      error.value = data.mensaje ?? 'No se pudo cargar la lista de equipos.'
-    }
-  } catch {
-    error.value = 'No se pudo conectar con el servidor. Verifique que la API esté en ejecución.'
+    equipos.value = await equiposApi.listar(filtroCliente.value || undefined)
+  } catch (e) {
+    errorLista.value = (e as Error).message
   } finally {
     cargando.value = false
   }
 }
 
-async function cargarClientes() {
+const visibles = computed(() => {
+  const texto = buscar.value.trim().toLowerCase()
+  return equipos.value.filter((e) =>
+    (!filtroEstado.value || e.estado === filtroEstado.value) &&
+    (!texto || [e.numeroSerie, e.marca, e.modelo, e.nombreCliente, e.nombreTipoEquipo]
+      .some((v) => v.toLowerCase().includes(texto))))
+})
+
+watch(filtroCliente, cargar)
+
+onMounted(async () => {
   try {
-    const token = sessionStorage.getItem('token')
-    const res = await fetch(`${BASE}/api/Cliente`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    const data = await res.json()
-    if (data.codigo === 200) {
-      clientes.value = data.data.filter((c: OpcionCliente) => c.estado === 'ACTIVO')
+    ;[tipos.value, clientes.value] = await Promise.all([equiposApi.tipos(), equiposApi.clientes()])
+  } catch (e) {
+    errorLista.value = (e as Error).message
+  }
+  await cargar()
+})
+
+function mostrarAviso(texto: string) {
+  aviso.value = texto
+  setTimeout(() => (aviso.value = ''), 3500)
+}
+
+// ---------- registrar / editar ----------
+const dlgEquipo = ref<HTMLDialogElement>()
+const editando = ref<Equipo | null>(null)
+const guardando = ref(false)
+const errorForm = ref('')
+const errores = reactive<Record<string, string>>({})
+
+const vacio = () => ({ clienteId: 0, tipoEquipoId: 0, marca: '', modelo: '', numeroSerie: '', descripcion: '' })
+const form = reactive(vacio())
+
+function limpiarErrores() {
+  errorForm.value = ''
+  Object.keys(errores).forEach((k) => delete errores[k])
+}
+
+function abrirNuevo() {
+  editando.value = null
+  Object.assign(form, vacio(), { clienteId: filtroCliente.value || 0 })
+  limpiarErrores()
+  dlgEquipo.value?.showModal()
+}
+
+function abrirEditar(e: Equipo) {
+  editando.value = e
+  Object.assign(form, {
+    clienteId: e.clienteId, tipoEquipoId: e.tipoEquipoId, marca: e.marca, modelo: e.modelo,
+    numeroSerie: e.numeroSerie, descripcion: e.descripcion ?? '',
+  })
+  limpiarErrores()
+  dlgEquipo.value?.showModal()
+}
+
+// Validación en la interfaz (la API y la base vuelven a validar)
+function validar(): boolean {
+  limpiarErrores()
+  if (!form.clienteId) errores.clienteId = 'Seleccione el cliente.'
+  if (!form.tipoEquipoId) errores.tipoEquipoId = 'Seleccione el tipo de equipo.'
+  if (!form.marca.trim()) errores.marca = 'Escriba la marca.'
+  if (!form.modelo.trim()) errores.modelo = 'Escriba el modelo.'
+  const serie = form.numeroSerie.trim()
+  if (!serie) errores.numeroSerie = 'Escriba el número de serie.'
+  else if (!/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(serie))
+    errores.numeroSerie = 'Use solo letras, números y guiones, sin espacios.'
+  return Object.keys(errores).length === 0
+}
+
+async function guardar() {
+  if (!validar()) return
+  const datos: DatosEquipo = {
+    clienteId: form.clienteId,
+    tipoEquipoId: form.tipoEquipoId,
+    marca: form.marca.trim(),
+    modelo: form.modelo.trim(),
+    numeroSerie: form.numeroSerie.trim().toUpperCase(),
+    descripcion: form.descripcion.trim() || null,
+  }
+  guardando.value = true
+  try {
+    if (editando.value) {
+      await equiposApi.actualizar(editando.value.equipoId, datos)
+      mostrarAviso(`Equipo ${datos.numeroSerie} actualizado.`)
+    } else {
+      await equiposApi.crear(datos)
+      mostrarAviso(`Equipo ${datos.numeroSerie} registrado.`)
     }
-  } catch {
-    clientes.value = []
+    dlgEquipo.value?.close()
+    await cargar()
+  } catch (e) {
+    errorForm.value = (e as Error).message
+  } finally {
+    guardando.value = false
   }
 }
 
-onMounted(() => {
-  cargarClientes()
-  cargarEquipos()
-})
+// ---------- desactivar ----------
+const dlgDesactivar = ref<HTMLDialogElement>()
+const porDesactivar = ref<Equipo | null>(null)
+const desactivando = ref(false)
+const errorDesactivar = ref('')
+
+function pedirDesactivar(e: Equipo) {
+  porDesactivar.value = e
+  errorDesactivar.value = ''
+  dlgDesactivar.value?.showModal()
+}
+
+async function desactivar() {
+  if (!porDesactivar.value) return
+  desactivando.value = true
+  errorDesactivar.value = ''
+  try {
+    await equiposApi.desactivar(porDesactivar.value.equipoId)
+    mostrarAviso(`Equipo ${porDesactivar.value.numeroSerie} desactivado.`)
+    dlgDesactivar.value?.close()
+    await cargar()
+  } catch (e) {
+    errorDesactivar.value = (e as Error).message
+  } finally {
+    desactivando.value = false
+  }
+}
 </script>
 
 <template>
@@ -76,192 +170,234 @@ onMounted(() => {
     <header class="cabecera">
       <div>
         <h1>Equipos</h1>
-        <p class="sub">Equipos registrados por cliente, con su tipo, marca y número de serie.</p>
+        <p class="sub">Equipos de cada cliente. El número de serie identifica al equipo en todas sus órdenes.</p>
       </div>
-      <form class="filtros" @submit.prevent="cargarEquipos()">
-        <select v-model="clienteId" aria-label="Filtrar por cliente" @change="cargarEquipos()">
-          <option value="">Todos los clientes</option>
-          <option v-for="c in clientes" :key="c.clienteId" :value="String(c.clienteId)">
-            {{ c.nombreRazonSocial }}
-          </option>
-        </select>
-        <button type="submit" :disabled="cargando">Actualizar</button>
-      </form>
+      <button v-if="puedeEditar" class="btn primario" @click="abrirNuevo">Nuevo equipo</button>
     </header>
 
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <p v-if="aviso" class="aviso" role="status">{{ aviso }}</p>
+    <p v-if="!puedeEditar" class="nota solo-lectura">Su rol solo permite consultar equipos.</p>
+
+    <section class="filtros">
+      <label class="campo grande">
+        <span>Buscar</span>
+        <input v-model="buscar" type="search" placeholder="Número de serie, marca, modelo o cliente" />
+      </label>
+      <label class="campo">
+        <span>Cliente</span>
+        <select v-model.number="filtroCliente">
+          <option :value="0">Todos</option>
+          <option v-for="c in clientes" :key="c.clienteId" :value="c.clienteId">{{ c.nombreRazonSocial }}</option>
+        </select>
+      </label>
+      <label class="campo">
+        <span>Estado</span>
+        <select v-model="filtroEstado">
+          <option value="ACTIVO">Activos</option>
+          <option value="INACTIVO">Inactivos</option>
+          <option value="">Todos</option>
+        </select>
+      </label>
+    </section>
+
+    <p v-if="errorLista" class="error" role="alert">{{ errorLista }}</p>
 
     <div class="tabla-wrap">
       <table>
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Cliente</th>
-            <th>Tipo</th>
-            <th>Marca</th>
-            <th>Modelo</th>
-            <th>N° serie</th>
-            <th>Estado</th>
+            <th>Número de serie</th><th>Tipo</th><th>Marca y modelo</th><th>Cliente</th><th>Estado</th><th></th>
           </tr>
         </thead>
         <tbody>
-          <tr v-if="cargando">
-            <td colspan="7" class="vacio">Cargando equipos…</td>
-          </tr>
-          <tr v-else-if="!equipos.length">
-            <td colspan="7" class="vacio">No hay equipos registrados.</td>
-          </tr>
-          <tr v-for="e in equipos" :key="e.equipoId">
-            <td class="num">{{ e.equipoId }}</td>
-            <td class="fuerte">{{ e.nombreCliente }}</td>
-            <td><span class="chip-tipo">{{ e.nombreTipoEquipo ?? '—' }}</span></td>
-            <td>{{ e.marca }}</td>
-            <td>{{ e.modelo }}</td>
-            <td class="num">{{ e.numeroSerie }}</td>
-            <td>
-              <span class="chip" :class="e.estado === 'ACTIVO' ? 'activo' : 'inactivo'">
-                {{ e.estado === 'ACTIVO' ? 'Activo' : 'Inactivo' }}
-              </span>
+          <tr v-if="cargando"><td colspan="6" class="vacio">Cargando equipos…</td></tr>
+          <tr v-else-if="!visibles.length">
+            <td colspan="6" class="vacio">
+              No hay equipos con ese criterio.<template v-if="puedeEditar"> Use «Nuevo equipo» para registrar uno.</template>
             </td>
           </tr>
+          <template v-else>
+            <tr v-for="e in visibles" :key="e.equipoId">
+              <td class="num">{{ e.numeroSerie }}</td>
+              <td>{{ e.nombreTipoEquipo }}</td>
+              <td>
+                {{ e.marca }} {{ e.modelo }}
+                <div v-if="e.descripcion" class="detalle">{{ e.descripcion }}</div>
+              </td>
+              <td>{{ e.nombreCliente }}</td>
+              <td><span class="chip" :class="e.estado.toLowerCase()">{{ e.estado === 'ACTIVO' ? 'Activo' : 'Inactivo' }}</span></td>
+              <td class="acciones">
+                <template v-if="puedeEditar && e.estado === 'ACTIVO'">
+                  <button class="btn enlace" @click="abrirEditar(e)">Editar</button>
+                  <button class="btn enlace peligro" @click="pedirDesactivar(e)">Desactivar</button>
+                </template>
+              </td>
+            </tr>
+          </template>
         </tbody>
       </table>
     </div>
+
+    <!-- Registrar / editar -->
+    <dialog ref="dlgEquipo" class="modal">
+      <form novalidate @submit.prevent="guardar">
+        <h2>{{ editando ? 'Editar equipo' : 'Nuevo equipo' }}</h2>
+        <p v-if="errorForm" class="error" role="alert">{{ errorForm }}</p>
+
+        <label class="campo">
+          <span>Cliente</span>
+          <select v-model.number="form.clienteId" :disabled="!!editando" :aria-invalid="!!errores.clienteId">
+            <option :value="0" disabled>Seleccione un cliente…</option>
+            <option v-for="c in (editando ? clientes : clientesActivos)" :key="c.clienteId" :value="c.clienteId">
+              {{ c.nombreRazonSocial }} — NIT {{ c.nit }}
+            </option>
+          </select>
+          <small v-if="errores.clienteId">{{ errores.clienteId }}</small>
+        </label>
+
+        <div class="fila">
+          <label class="campo">
+            <span>Tipo de equipo</span>
+            <select v-model.number="form.tipoEquipoId" :aria-invalid="!!errores.tipoEquipoId">
+              <option :value="0" disabled>Seleccione…</option>
+              <option v-for="t in tipos" :key="t.tipoEquipoId" :value="t.tipoEquipoId">{{ t.nombre }}</option>
+            </select>
+            <small v-if="errores.tipoEquipoId">{{ errores.tipoEquipoId }}</small>
+          </label>
+          <label class="campo">
+            <span>Número de serie</span>
+            <input
+v-model="form.numeroSerie" maxlength="50" :disabled="!!editando" autocomplete="off"
+                   placeholder="Ej. HP5CD1234XYZ" :aria-invalid="!!errores.numeroSerie" />
+            <small v-if="errores.numeroSerie">{{ errores.numeroSerie }}</small>
+          </label>
+        </div>
+
+        <div class="fila">
+          <label class="campo">
+            <span>Marca</span>
+            <input v-model="form.marca" maxlength="50" :aria-invalid="!!errores.marca" />
+            <small v-if="errores.marca">{{ errores.marca }}</small>
+          </label>
+          <label class="campo">
+            <span>Modelo</span>
+            <input v-model="form.modelo" maxlength="50" :aria-invalid="!!errores.modelo" />
+            <small v-if="errores.modelo">{{ errores.modelo }}</small>
+          </label>
+        </div>
+
+        <label class="campo">
+          <span>Descripción (opcional)</span>
+          <textarea
+v-model="form.descripcion" rows="2" maxlength="200"
+                    placeholder="Color, accesorios, uso que le da el cliente…"></textarea>
+        </label>
+
+        <p v-if="editando" class="nota">El cliente y el número de serie no se cambian, para no alterar el historial del equipo.</p>
+
+        <div class="botones">
+          <button type="button" class="btn" @click="dlgEquipo?.close()">Cancelar</button>
+          <button type="submit" class="btn primario" :disabled="guardando">
+            {{ guardando ? 'Guardando…' : editando ? 'Guardar cambios' : 'Registrar equipo' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Confirmar desactivación -->
+    <dialog ref="dlgDesactivar" class="modal">
+      <div v-if="porDesactivar" class="confirmar">
+        <h2>Desactivar equipo</h2>
+        <p>
+          ¿Desactivar el equipo <b>{{ porDesactivar.numeroSerie }}</b> ({{ porDesactivar.marca }} {{ porDesactivar.modelo }})
+          de {{ porDesactivar.nombreCliente }}?
+        </p>
+        <p class="nota">No se borra: queda como inactivo y conserva su historial de órdenes.</p>
+        <p v-if="errorDesactivar" class="error" role="alert">{{ errorDesactivar }}</p>
+        <div class="botones">
+          <button type="button" class="btn" @click="dlgDesactivar?.close()">Cancelar</button>
+          <button type="button" class="btn peligro-lleno" :disabled="desactivando" @click="desactivar">
+            {{ desactivando ? 'Desactivando…' : 'Desactivar' }}
+          </button>
+        </div>
+      </div>
+    </dialog>
   </main>
 </template>
 
 <style scoped>
+/* Colores que cambian con el tema (modo claro / oscuro de la plantilla) */
 .pagina {
-  padding: 26px 30px;
+  --c-title: #17375e; --c-text: #222b38; --c-muted: #5a6472; --c-surface: #fff;
+  --c-row: #f4f6fa; --c-border: #d0d7e2; --c-input: #b9c2d0; --c-disabled: #f1f3f7;
+  --c-danger: #8a1f1f;
 }
-
-.cabecera {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 18px;
-  flex-wrap: wrap;
+:root.dark .pagina {
+  --c-title: #c7d2fe; --c-text: #e2e8f0; --c-muted: #a3b2c9; --c-surface: rgb(18 27 46);
+  --c-row: rgb(24 36 60); --c-border: rgb(43 56 78); --c-input: rgb(71 85 105); --c-disabled: rgb(30 41 59);
+  --c-danger: #f87171;
 }
+.modal { background: var(--c-surface); color: var(--c-text); margin: auto; }
+.pagina { max-width: 1180px; margin: 0 auto; padding: 32px 24px 64px; text-align: left; color: var(--c-text); }
+.cabecera { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;
+  border-bottom: 3px solid #c8962e; padding-bottom: 16px; margin-bottom: 24px; }
+h1 { margin: 0; font: 700 28px/1.2 Georgia, 'Times New Roman', serif; color: var(--c-title); }
+h2 { margin: 0; font: 700 22px/1.2 Georgia, serif; color: var(--c-title); }
+.sub { margin: 4px 0 0; color: var(--c-muted); font-size: 15px; }
 
-.cabecera h1 {
-  margin: 0;
-  font-size: 24px;
-  color: #1e2a4a;
-}
+.filtros { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+.campo { display: flex; flex-direction: column; gap: 4px; font-size: 14px; min-width: 180px; }
+.campo span { font-weight: 600; color: var(--c-title); }
+.campo.grande { flex: 1; min-width: 240px; }
+input, select, textarea { font: inherit; font-size: 15px; padding: 9px 10px; border: 1px solid var(--c-input); border-radius: 4px;
+  background: var(--c-surface); color: var(--c-text); box-sizing: border-box; width: 100%; }
+textarea { resize: vertical; }
+input:disabled, select:disabled { background: var(--c-disabled); color: var(--c-muted); }
+input:focus-visible, select:focus-visible, textarea:focus-visible, .btn:focus-visible { outline: 3px solid #c8962e; outline-offset: 1px; }
+[aria-invalid='true'] { border-color: #a32a2a; }
+small { color: #a32a2a; font-size: 13px; }
 
-.sub {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: #7a809a;
-}
+.tabla-wrap { overflow-x: auto; border: 1px solid var(--c-border); border-radius: 4px; }
+table { width: 100%; border-collapse: collapse; font-size: 15px; }
+th { background: #17375e; color: #fff; text-align: left; padding: 10px 12px; font-weight: 600; white-space: nowrap; }
+td { padding: 10px 12px; border-top: 1px solid var(--c-border); vertical-align: middle; }
+tbody tr:nth-child(even) { background: var(--c-row); }
+.num { font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; color: var(--c-title); }
+.detalle { font-size: 13px; color: var(--c-muted); }
+.vacio { text-align: center; color: var(--c-muted); padding: 28px 12px; }
+.acciones { text-align: right; white-space: nowrap; }
 
-.filtros {
-  display: flex;
-  gap: 8px;
-}
+.chip { padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.chip.activo { background: #dff3e4; color: #1d6b34; }
+.chip.inactivo { background: #ececec; color: #3c4450; }
 
-.filtros select {
-  border: 1px solid #d9def1;
-  border-radius: 10px;
-  padding: 8px 12px;
-  font-size: 13.5px;
-  min-width: 220px;
-  background: #fff;
-}
+.btn { font: inherit; font-size: 15px; padding: 9px 16px; border-radius: 4px; border: 1px solid var(--c-input);
+  background: var(--c-surface); color: var(--c-title); cursor: pointer; }
+.btn.primario { background: #17375e; border-color: var(--c-title); color: #fff; font-weight: 600; }
+.btn.primario:hover:not(:disabled) { background: #0f2a4a; }
+.btn:disabled { opacity: 0.6; cursor: wait; }
+.btn.enlace { border: none; background: none; padding: 4px 8px; text-decoration: underline; }
+.btn.enlace.peligro { color: var(--c-danger); }
+.btn.peligro-lleno { background: #a32a2a; border-color: #a32a2a; color: #fff; font-weight: 600; }
 
-.filtros button {
-  border: none;
-  border-radius: 10px;
-  background: #3d56a8;
-  color: #fff;
-  font-weight: 600;
-  font-size: 13px;
-  padding: 8px 16px;
-  cursor: pointer;
-}
+.aviso { background: #dff3e4; color: #1d6b34; padding: 10px 14px; border-radius: 4px; margin: 0 0 16px; }
+.error { background: #fbe4e4; color: #8a1f1f; padding: 10px 14px; border-radius: 4px; margin: 0 0 16px; }
+.modal .error { margin: 0; }
+.nota { margin: 0; color: var(--c-muted); font-size: 14px; }
+.solo-lectura { margin-bottom: 16px; }
 
-.filtros button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
+.modal { border: none; border-radius: 6px; padding: 28px; width: min(560px, 92vw);
+  box-shadow: 0 20px 50px rgba(15, 42, 74, 0.35); }
+.modal::backdrop { background: rgba(15, 42, 74, 0.5); }
+.modal form, .confirmar { display: flex; flex-direction: column; gap: 14px; text-align: left; }
+.confirmar p { margin: 0; }
+.fila { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.fila .campo { min-width: 0; }
+.botones { display: flex; justify-content: flex-end; gap: 10px; }
 
-.tabla-wrap {
-  overflow-x: auto;
-  background: #fff;
-  border: 1px solid #e4e8f4;
-  border-radius: 14px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-th, td {
-  padding: 12px 16px;
-  text-align: left;
-  font-size: 13.5px;
-  border-bottom: 1px solid #eef0f7;
-}
-
-th {
-  background: #f4f6fc;
-  color: #3c4360;
-  font-weight: 600;
-}
-
-tr:last-child td {
-  border-bottom: none;
-}
-
-.fuerte {
-  font-weight: 600;
-  color: #2c3050;
-}
-
-.num {
-  color: #7a809a;
-}
-
-.vacio {
-  text-align: center;
-  color: #7a809a;
-  padding: 30px;
-}
-
-.error {
-  background: #ffebee;
-  color: #b1303a;
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  margin-bottom: 14px;
-}
-
-.chip-tipo {
-  background: #eef2ff;
-  color: #3d56a8;
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.chip {
-  border-radius: 999px;
-  padding: 3px 10px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.activo {
-  background: #e8f5e9;
-  color: #1f6f3c;
-}
-
-.inactivo {
-  background: #ffebee;
-  color: #b1303a;
+@media (max-width: 700px) {
+  .fila { grid-template-columns: 1fr; }
+  .cabecera { flex-direction: column; align-items: stretch; }
+  .campo { min-width: 0; flex: 1 1 100%; }
 }
 </style>
