@@ -18,6 +18,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/orden?buscar=OS-2026&estado=ABIERTAS  (sp_ListarOrdenes, script 10)
+        [Authorize(Policy = "VerOrdenes")]
         [HttpGet]
         public async Task<IActionResult> Consultar([FromQuery] string? buscar, [FromQuery] string? estado)
         {
@@ -35,6 +36,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/orden/5  (incluye historial de estados)
+        [Authorize(Policy = "VerOrdenes")]
         [HttpGet("{id:int}")]
         public async Task<IActionResult> ConsultarPorId(int id)
         {
@@ -52,6 +54,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/orden/estados
+        [Authorize(Policy = "VerOrdenes")]
         [HttpGet("estados")]
         public async Task<IActionResult> ConsultarEstados()
         {
@@ -69,6 +72,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         }
 
         // GET: api/orden/5/historial  (solo el historial de estados)
+        [Authorize(Policy = "VerOrdenes")]
         [HttpGet("{id:int}/historial")]
         public async Task<IActionResult> ConsultarHistorial(int id)
         {
@@ -85,7 +89,8 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             }
         }
 
-        // POST: api/orden/registrar  (sp_RegistrarOrden)
+        // POST: api/orden/registrar  (sp_RegistrarOrden) — solo ADMINISTRADOR/RECEPCION
+        [Authorize(Policy = "CrearOrdenes")]
         [HttpPost("registrar")]
         public async Task<IActionResult> Registrar([FromBody] OrdenDTO request)
         {
@@ -106,7 +111,8 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             }
         }
 
-        // POST: api/orden/cambiar-estado  (sp_CambiarEstadoOrden)
+        // POST: api/orden/cambiar-estado  (sp_CambiarEstadoOrden) — ADMINISTRADOR/RECEPCION/TECNICO
+        [Authorize(Policy = "CambiarEstadoOrden")]
         [HttpPost("cambiar-estado")]
         public async Task<IActionResult> CambiarEstado([FromBody] OrdenDTO request)
         {
