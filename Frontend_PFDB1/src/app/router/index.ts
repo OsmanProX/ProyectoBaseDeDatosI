@@ -62,6 +62,19 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/features/usuarios/views/UsuariosListView.vue'),
         meta: { title: 'Usuarios', requiresAuth: true, permiso: 'VER_USUARIOS' },
       },
+      // Semana 3
+      {
+        path: 'taller',
+        name: 'taller',
+        component: () => import('@/features/taller/views/TallerView.vue'),
+        meta: { title: 'Taller', requiresAuth: true, roles: ['ADMINISTRADOR', 'TECNICO'] },
+      },
+      {
+        path: 'inventario',
+        name: 'inventario',
+        component: () => import('@/features/inventario/views/InventarioView.vue'),
+        meta: { title: 'Inventario', requiresAuth: true, roles: ['ADMINISTRADOR', 'BODEGA'] },
+      },
       {
         path: 'acceso-denegado',
         name: 'acceso-denegado',

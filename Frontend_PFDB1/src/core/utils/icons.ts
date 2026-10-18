@@ -12,6 +12,8 @@ import {
   Settings,
   Home,
   BookOpen,
+  Wrench,
+  Package,
 } from 'lucide-vue-next'
 export const iconRegistry = {
   ClipboardList,
@@ -27,6 +29,8 @@ export const iconRegistry = {
   Settings,
   Home,
   BookOpen,
+  Wrench,
+  Package,
 }
 export type IconName = keyof typeof iconRegistry
 
@@ -44,6 +48,8 @@ const iconLabels: Record<IconName, string> = {
   Settings: 'Ajustes',
   Home: 'Inicio',
   BookOpen: 'Biblioteca',
+  Wrench: 'Taller',
+  Package: 'Inventario',
 }
 
 export const iconCatalog = (Object.keys(iconRegistry) as IconName[]).map((name) => ({

@@ -17,4 +17,7 @@ export const staticNavigation: NavigationItem[] = [
   { id: -3, name: 'Clientes', path: '/clientes', icon: 'Contact', roles: ['ADMINISTRADOR', 'RECEPCION'] },
   { id: -4, name: 'Equipos', path: '/equipos', icon: 'Laptop', roles: ['ADMINISTRADOR', 'RECEPCION'] },
   { id: -5, name: 'Usuarios', path: '/usuarios', icon: 'Users', permiso: 'VER_USUARIOS' },
+  // Semana 3
+  { id: -6, name: 'Taller', path: '/taller', icon: 'Wrench', roles: ['ADMINISTRADOR', 'TECNICO'] },
+  { id: -7, name: 'Inventario', path: '/inventario', icon: 'Package', roles: ['ADMINISTRADOR', 'BODEGA'] },
 ]

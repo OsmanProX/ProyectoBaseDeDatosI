@@ -53,6 +53,12 @@ builder.Services.AddAuthorization(options =>
         p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
     options.AddPolicy("GestionarEquipos",
         p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
+    // Semana 3 — Taller: diagnóstico, reparación, actividades y repuestos (técnicos)
+    options.AddPolicy("Taller",
+        p => p.RequireRole("ADMINISTRADOR", "TECNICO"));
+    // Semana 3 — Inventario y compras (bodega)
+    options.AddPolicy("Inventario",
+        p => p.RequireRole("ADMINISTRADOR", "BODEGA"));
 });
 
 // CORS: permite llamar a la API desde el frontend Vue en desarrollo
