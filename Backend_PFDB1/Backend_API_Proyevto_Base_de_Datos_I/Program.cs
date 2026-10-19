@@ -15,8 +15,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<DBContext>();
 builder.Services.AddScoped<JwtService>();
 
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key no está configurada.");
+// Las claves no están en appsettings.json: se leen de los secretos de usuario (README, paso 2).
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey))
+    throw new InvalidOperationException("Jwt:Key no está configurada. Guárdela en los secretos de usuario (ver README, paso 2).");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)

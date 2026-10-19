@@ -8,8 +8,10 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.BD
 
         public DBContext(IConfiguration configuration)
         {
-            _connectionString = configuration.GetConnectionString("DefaultConnection")
-                ?? throw new InvalidOperationException("No se encontro la cadena de conexion DefaultConnection.");
+            var cadena = configuration.GetConnectionString("DefaultConnection");
+            if (string.IsNullOrWhiteSpace(cadena))
+                throw new InvalidOperationException("No se encontró la cadena de conexión DefaultConnection. Guárdela en los secretos de usuario (ver README, paso 2).");
+            _connectionString = cadena;
         }
 
         public SqlConnection CreateConnection()
