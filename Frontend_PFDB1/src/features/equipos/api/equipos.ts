@@ -1,6 +1,7 @@
 // Acceso a la API de equipos (EquipoController). El frontend no se conecta a SQL Server.
 // Rutas: GET /api/equipo?clienteId=, GET /api/equipo/tipos, POST /api/equipo/crear,
-//        PUT /api/equipo/actualizar, DELETE /api/equipo/eliminar/{id} (pasa a INACTIVO)
+//        PUT /api/equipo/actualizar, DELETE /api/equipo/eliminar/{id} (pasa a INACTIVO),
+//        PUT /api/equipo/activar/{id} (vuelve a ACTIVO)
 // La API responde { codigo, mensaje, data } y pide el token del login (Bearer).
 import { apiFetch, ApiFetchError as ApiError } from '@/core/api/apiFetch'
 
@@ -75,6 +76,9 @@ const apiReal = {
   },
   desactivar(equipoId: number) {
     return request<unknown>(`/api/equipo/eliminar/${equipoId}`, { method: 'DELETE' })
+  },
+  activar(equipoId: number) {
+    return request<unknown>(`/api/equipo/activar/${equipoId}`, { method: 'PUT' })
   },
 }
 
@@ -151,6 +155,12 @@ const apiDemo = {
     const e = equiposMock.find((x) => x.equipoId === equipoId)
     if (!e) return Promise.reject(new ApiError('Equipo no encontrado.', 404))
     e.estado = 'INACTIVO'
+    return espera(null)
+  },
+  activar(equipoId: number) {
+    const e = equiposMock.find((x) => x.equipoId === equipoId)
+    if (!e) return Promise.reject(new ApiError('Equipo no encontrado.', 404))
+    e.estado = 'ACTIVO'
     return espera(null)
   },
 }

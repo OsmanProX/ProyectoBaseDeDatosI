@@ -9,6 +9,14 @@
       content="Administración de usuarios, roles y menús de UMG La Florida"
     />
     <title>La Florida · Administración</title>
+    <!-- Aplica el tema guardado (o el de Windows) antes de cargar Vue, para que no parpadee en blanco -->
+    <script>
+      try {
+        var t = localStorage.getItem('umg-theme')
+        if (t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="app"></div>

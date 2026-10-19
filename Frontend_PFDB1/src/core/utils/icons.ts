@@ -14,6 +14,8 @@ import {
   BookOpen,
   Wrench,
   Package,
+  Receipt,
+  ChartColumn,
 } from 'lucide-vue-next'
 export const iconRegistry = {
   ClipboardList,
@@ -31,6 +33,8 @@ export const iconRegistry = {
   BookOpen,
   Wrench,
   Package,
+  Receipt,
+  ChartColumn,
 }
 export type IconName = keyof typeof iconRegistry
 
@@ -50,6 +54,8 @@ const iconLabels: Record<IconName, string> = {
   BookOpen: 'Biblioteca',
   Wrench: 'Taller',
   Package: 'Inventario',
+  Receipt: 'Caja',
+  ChartColumn: 'Reportes',
 }
 
 export const iconCatalog = (Object.keys(iconRegistry) as IconName[]).map((name) => ({

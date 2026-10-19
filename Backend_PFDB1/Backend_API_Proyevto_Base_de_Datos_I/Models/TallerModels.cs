@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Backend_API_Proyevto_Base_de_Datos_I.Models
 {
     // ===== Semana 3: Taller (diagnóstico, reparación, actividades, repuestos) =====
@@ -84,36 +86,49 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
 
     public class DiagnosticoRequest
     {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la orden.")]
         public int OrdenId { get; set; }
+        [Required(ErrorMessage = "Describa el diagnóstico.")]
         public string? Descripcion { get; set; }
+        [Range(typeof(decimal), "0", "99999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true, ErrorMessage = "La mano de obra estimada no puede ser negativa.")]
         public decimal CostoManoObraEstimado { get; set; }
         public string? Observaciones { get; set; }
     }
 
     public class IniciarReparacionRequest
     {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la orden.")]
         public int OrdenId { get; set; }
         public string? DescripcionTrabajo { get; set; }
     }
 
     public class ActividadRequest
     {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la reparación.")]
         public int ReparacionId { get; set; }
+        [Required(ErrorMessage = "Describa la actividad.")]
         public string? Descripcion { get; set; }
+        [Range(typeof(decimal), "0", "99999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true, ErrorMessage = "Las horas no pueden ser negativas.")]
         public decimal? HorasTrabajadas { get; set; }
     }
 
     public class AsignarRepuestoRequest
     {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la reparación.")]
         public int ReparacionId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "Indique el repuesto.")]
         public int RepuestoId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la bodega.")]
         public int BodegaId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "La cantidad debe ser mayor que cero.")]
         public int Cantidad { get; set; }
     }
 
     public class FinalizarReparacionRequest
     {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la reparación.")]
         public int ReparacionId { get; set; }
+        [Range(typeof(decimal), "0", "99999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true, ErrorMessage = "La mano de obra no puede ser negativa.")]
         public decimal? CostoManoObra { get; set; }
         public string? DescripcionTrabajo { get; set; }
     }

@@ -10,7 +10,15 @@
 -- USE TechCare;
 -- GO
 
+-- Llaves foráneas: todas con ON DELETE NO ACTION ON UPDATE NO ACTION, a propósito.
+--   R14: la información transaccional no se borra; se cancela o anula. Un CASCADE
+--   borraría en cadena órdenes, pagos o movimientos; con NO ACTION la base rechaza
+--   (error 547) borrar un padre que tiene hijos. Las llaves son IDENTITY y no cambian,
+--   por eso tampoco se propaga el UPDATE.
+
 -- Borrar las tablas si ya existen (al revés, por las llaves foráneas)
+-- Permiso (script 08) apunta a Rol, por eso se borra primero
+DROP TABLE IF EXISTS dbo.Permiso;
 DROP TABLE IF EXISTS dbo.Entrega;
 DROP TABLE IF EXISTS dbo.Pago;
 DROP TABLE IF EXISTS dbo.Factura;
@@ -75,8 +83,8 @@ CREATE TABLE dbo.UsuarioRol (
     RolId            INT      NOT NULL,
     FechaAsignacion  DATETIME NOT NULL CONSTRAINT DF_UsuarioRol_Fecha DEFAULT (GETDATE()),
     CONSTRAINT PK_UsuarioRol PRIMARY KEY (UsuarioId, RolId),
-    CONSTRAINT FK_UsuarioRol_Usuario FOREIGN KEY (UsuarioId) REFERENCES dbo.Usuario (UsuarioId),
-    CONSTRAINT FK_UsuarioRol_Rol     FOREIGN KEY (RolId)     REFERENCES dbo.Rol (RolId)
+    CONSTRAINT FK_UsuarioRol_Usuario FOREIGN KEY (UsuarioId) REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_UsuarioRol_Rol     FOREIGN KEY (RolId)     REFERENCES dbo.Rol (RolId) ON DELETE NO ACTION ON UPDATE NO ACTION
 );
 GO
 
@@ -121,8 +129,8 @@ CREATE TABLE dbo.Equipo (
     Estado        VARCHAR(10)  NOT NULL CONSTRAINT DF_Equipo_Estado DEFAULT ('ACTIVO'),
     CONSTRAINT PK_Equipo PRIMARY KEY (EquipoId),
     CONSTRAINT UQ_Equipo_NumeroSerie UNIQUE (NumeroSerie),
-    CONSTRAINT FK_Equipo_Cliente    FOREIGN KEY (ClienteId)    REFERENCES dbo.Cliente (ClienteId),
-    CONSTRAINT FK_Equipo_TipoEquipo FOREIGN KEY (TipoEquipoId) REFERENCES dbo.TipoEquipo (TipoEquipoId),
+    CONSTRAINT FK_Equipo_Cliente    FOREIGN KEY (ClienteId)    REFERENCES dbo.Cliente (ClienteId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Equipo_TipoEquipo FOREIGN KEY (TipoEquipoId) REFERENCES dbo.TipoEquipo (TipoEquipoId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Equipo_Estado CHECK (Estado IN ('ACTIVO','INACTIVO'))
 );
 GO
@@ -154,10 +162,10 @@ CREATE TABLE dbo.OrdenServicio (
     Observaciones       VARCHAR(500) NULL,
     CONSTRAINT PK_OrdenServicio PRIMARY KEY (OrdenId),
     CONSTRAINT UQ_OrdenServicio_NumeroOrden UNIQUE (NumeroOrden),
-    CONSTRAINT FK_Orden_Cliente     FOREIGN KEY (ClienteId)          REFERENCES dbo.Cliente (ClienteId),
-    CONSTRAINT FK_Orden_Equipo      FOREIGN KEY (EquipoId)           REFERENCES dbo.Equipo (EquipoId),
-    CONSTRAINT FK_Orden_Usuario     FOREIGN KEY (UsuarioRecepcionId) REFERENCES dbo.Usuario (UsuarioId),
-    CONSTRAINT FK_Orden_EstadoOrden FOREIGN KEY (EstadoOrdenId)      REFERENCES dbo.EstadoOrden (EstadoOrdenId),
+    CONSTRAINT FK_Orden_Cliente     FOREIGN KEY (ClienteId)          REFERENCES dbo.Cliente (ClienteId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Orden_Equipo      FOREIGN KEY (EquipoId)           REFERENCES dbo.Equipo (EquipoId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Orden_Usuario     FOREIGN KEY (UsuarioRecepcionId) REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Orden_EstadoOrden FOREIGN KEY (EstadoOrdenId)      REFERENCES dbo.EstadoOrden (EstadoOrdenId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Orden_Prioridad CHECK (Prioridad IN ('BAJA','MEDIA','ALTA','URGENTE'))
 );
 GO
@@ -172,10 +180,10 @@ CREATE TABLE dbo.HistorialEstadoOrden (
     UsuarioId         INT          NOT NULL,
     Observacion       VARCHAR(300) NULL,
     CONSTRAINT PK_HistorialEstadoOrden PRIMARY KEY (HistorialId),
-    CONSTRAINT FK_Historial_Orden          FOREIGN KEY (OrdenId)          REFERENCES dbo.OrdenServicio (OrdenId),
-    CONSTRAINT FK_Historial_EstadoAnterior FOREIGN KEY (EstadoAnteriorId) REFERENCES dbo.EstadoOrden (EstadoOrdenId),
-    CONSTRAINT FK_Historial_EstadoNuevo    FOREIGN KEY (EstadoNuevoId)    REFERENCES dbo.EstadoOrden (EstadoOrdenId),
-    CONSTRAINT FK_Historial_Usuario        FOREIGN KEY (UsuarioId)        REFERENCES dbo.Usuario (UsuarioId)
+    CONSTRAINT FK_Historial_Orden          FOREIGN KEY (OrdenId)          REFERENCES dbo.OrdenServicio (OrdenId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Historial_EstadoAnterior FOREIGN KEY (EstadoAnteriorId) REFERENCES dbo.EstadoOrden (EstadoOrdenId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Historial_EstadoNuevo    FOREIGN KEY (EstadoNuevoId)    REFERENCES dbo.EstadoOrden (EstadoOrdenId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Historial_Usuario        FOREIGN KEY (UsuarioId)        REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION
 );
 GO
 
@@ -192,8 +200,8 @@ CREATE TABLE dbo.Diagnostico (
     Observaciones          VARCHAR(300)  NULL,
     CONSTRAINT PK_Diagnostico PRIMARY KEY (DiagnosticoId),
     CONSTRAINT UQ_Diagnostico_Orden UNIQUE (OrdenId),
-    CONSTRAINT FK_Diagnostico_Orden   FOREIGN KEY (OrdenId)   REFERENCES dbo.OrdenServicio (OrdenId),
-    CONSTRAINT FK_Diagnostico_Tecnico FOREIGN KEY (TecnicoId) REFERENCES dbo.Usuario (UsuarioId),
+    CONSTRAINT FK_Diagnostico_Orden   FOREIGN KEY (OrdenId)   REFERENCES dbo.OrdenServicio (OrdenId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Diagnostico_Tecnico FOREIGN KEY (TecnicoId) REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Diagnostico_Costo CHECK (CostoManoObraEstimado >= 0)
 );
 GO
@@ -210,8 +218,8 @@ CREATE TABLE dbo.Reparacion (
     Estado              VARCHAR(12)   NOT NULL CONSTRAINT DF_Reparacion_Estado DEFAULT ('EN_PROCESO'),
     CONSTRAINT PK_Reparacion PRIMARY KEY (ReparacionId),
     CONSTRAINT UQ_Reparacion_Diagnostico UNIQUE (DiagnosticoId),
-    CONSTRAINT FK_Reparacion_Diagnostico FOREIGN KEY (DiagnosticoId) REFERENCES dbo.Diagnostico (DiagnosticoId),
-    CONSTRAINT FK_Reparacion_Tecnico     FOREIGN KEY (TecnicoId)     REFERENCES dbo.Usuario (UsuarioId),
+    CONSTRAINT FK_Reparacion_Diagnostico FOREIGN KEY (DiagnosticoId) REFERENCES dbo.Diagnostico (DiagnosticoId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Reparacion_Tecnico     FOREIGN KEY (TecnicoId)     REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Reparacion_Fechas CHECK (FechaFin IS NULL OR FechaFin >= FechaInicio),
     CONSTRAINT CK_Reparacion_Costo  CHECK (CostoManoObra >= 0),
     CONSTRAINT CK_Reparacion_Estado CHECK (Estado IN ('EN_PROCESO','FINALIZADA','CANCELADA'))
@@ -226,7 +234,7 @@ CREATE TABLE dbo.ActividadReparacion (
     HorasTrabajadas  DECIMAL(5,2) NULL,
     FechaRegistro    DATETIME     NOT NULL CONSTRAINT DF_Actividad_Fecha DEFAULT (GETDATE()),
     CONSTRAINT PK_ActividadReparacion PRIMARY KEY (ReparacionId, NumeroActividad),
-    CONSTRAINT FK_Actividad_Reparacion FOREIGN KEY (ReparacionId) REFERENCES dbo.Reparacion (ReparacionId),
+    CONSTRAINT FK_Actividad_Reparacion FOREIGN KEY (ReparacionId) REFERENCES dbo.Reparacion (ReparacionId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Actividad_Numero CHECK (NumeroActividad > 0),
     CONSTRAINT CK_Actividad_Horas  CHECK (HorasTrabajadas IS NULL OR HorasTrabajadas > 0)
 );
@@ -257,7 +265,7 @@ CREATE TABLE dbo.Repuesto (
     Estado                  VARCHAR(10)   NOT NULL CONSTRAINT DF_Repuesto_Estado DEFAULT ('ACTIVO'),
     CONSTRAINT PK_Repuesto PRIMARY KEY (RepuestoId),
     CONSTRAINT UQ_Repuesto_Codigo UNIQUE (Codigo),
-    CONSTRAINT FK_Repuesto_Categoria FOREIGN KEY (CategoriaId) REFERENCES dbo.Categoria (CategoriaId),
+    CONSTRAINT FK_Repuesto_Categoria FOREIGN KEY (CategoriaId) REFERENCES dbo.Categoria (CategoriaId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Repuesto_Precios CHECK (PrecioCompraReferencia >= 0 AND PrecioVenta >= 0),
     CONSTRAINT CK_Repuesto_Estado  CHECK (Estado IN ('ACTIVO','INACTIVO'))
 );
@@ -282,8 +290,8 @@ CREATE TABLE dbo.Inventario (
     StockMinimo         INT      NOT NULL CONSTRAINT DF_Inventario_StockMinimo DEFAULT (0),
     FechaActualizacion  DATETIME NOT NULL CONSTRAINT DF_Inventario_Fecha DEFAULT (GETDATE()),
     CONSTRAINT PK_Inventario PRIMARY KEY (RepuestoId, BodegaId),
-    CONSTRAINT FK_Inventario_Repuesto FOREIGN KEY (RepuestoId) REFERENCES dbo.Repuesto (RepuestoId),
-    CONSTRAINT FK_Inventario_Bodega   FOREIGN KEY (BodegaId)   REFERENCES dbo.Bodega (BodegaId),
+    CONSTRAINT FK_Inventario_Repuesto FOREIGN KEY (RepuestoId) REFERENCES dbo.Repuesto (RepuestoId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Inventario_Bodega   FOREIGN KEY (BodegaId)   REFERENCES dbo.Bodega (BodegaId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Inventario_Existencia  CHECK (Existencia >= 0),    -- nunca negativa
     CONSTRAINT CK_Inventario_StockMinimo CHECK (StockMinimo >= 0)
 );
@@ -300,9 +308,9 @@ CREATE TABLE dbo.ReparacionRepuesto (
     FechaRegistro        DATETIME      NOT NULL CONSTRAINT DF_RepRep_Fecha DEFAULT (GETDATE()),
     UsuarioId            INT           NOT NULL,   -- quién asignó el repuesto
     CONSTRAINT PK_ReparacionRepuesto PRIMARY KEY (ReparacionId, RepuestoId, BodegaId),
-    CONSTRAINT FK_RepRep_Reparacion FOREIGN KEY (ReparacionId)         REFERENCES dbo.Reparacion (ReparacionId),
-    CONSTRAINT FK_RepRep_Inventario FOREIGN KEY (RepuestoId, BodegaId) REFERENCES dbo.Inventario (RepuestoId, BodegaId),
-    CONSTRAINT FK_RepRep_Usuario    FOREIGN KEY (UsuarioId)            REFERENCES dbo.Usuario (UsuarioId),
+    CONSTRAINT FK_RepRep_Reparacion FOREIGN KEY (ReparacionId)         REFERENCES dbo.Reparacion (ReparacionId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_RepRep_Inventario FOREIGN KEY (RepuestoId, BodegaId) REFERENCES dbo.Inventario (RepuestoId, BodegaId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_RepRep_Usuario    FOREIGN KEY (UsuarioId)            REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_RepRep_Cantidad CHECK (Cantidad > 0),
     CONSTRAINT CK_RepRep_Precios  CHECK (CostoUnitario >= 0 AND PrecioVentaUnitario >= 0)
 );
@@ -319,7 +327,7 @@ CREATE TABLE dbo.AuditoriaPrecio (
     FechaCambio           DATETIME      NOT NULL CONSTRAINT DF_Auditoria_Fecha DEFAULT (GETDATE()),
     UsuarioBD             VARCHAR(100)  NOT NULL CONSTRAINT DF_Auditoria_UsuarioBD DEFAULT (SUSER_SNAME()),
     CONSTRAINT PK_AuditoriaPrecio PRIMARY KEY (AuditoriaId),
-    CONSTRAINT FK_Auditoria_Repuesto FOREIGN KEY (RepuestoId) REFERENCES dbo.Repuesto (RepuestoId)
+    CONSTRAINT FK_Auditoria_Repuesto FOREIGN KEY (RepuestoId) REFERENCES dbo.Repuesto (RepuestoId) ON DELETE NO ACTION ON UPDATE NO ACTION
 );
 GO
 
@@ -348,8 +356,8 @@ CREATE TABLE dbo.ProveedorRepuesto (
     CodigoProveedor   VARCHAR(30)   NULL,
     PrecioReferencia  DECIMAL(10,2) NULL,
     CONSTRAINT PK_ProveedorRepuesto PRIMARY KEY (ProveedorId, RepuestoId),
-    CONSTRAINT FK_ProvRep_Proveedor FOREIGN KEY (ProveedorId) REFERENCES dbo.Proveedor (ProveedorId),
-    CONSTRAINT FK_ProvRep_Repuesto  FOREIGN KEY (RepuestoId)  REFERENCES dbo.Repuesto (RepuestoId),
+    CONSTRAINT FK_ProvRep_Proveedor FOREIGN KEY (ProveedorId) REFERENCES dbo.Proveedor (ProveedorId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_ProvRep_Repuesto  FOREIGN KEY (RepuestoId)  REFERENCES dbo.Repuesto (RepuestoId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_ProvRep_Precio CHECK (PrecioReferencia IS NULL OR PrecioReferencia >= 0)
 );
 GO
@@ -367,9 +375,9 @@ CREATE TABLE dbo.Compra (
     Observaciones   VARCHAR(300) NULL,
     CONSTRAINT PK_Compra PRIMARY KEY (CompraId),
     CONSTRAINT UQ_Compra_NumeroCompra UNIQUE (NumeroCompra),
-    CONSTRAINT FK_Compra_Proveedor FOREIGN KEY (ProveedorId) REFERENCES dbo.Proveedor (ProveedorId),
-    CONSTRAINT FK_Compra_Bodega    FOREIGN KEY (BodegaId)    REFERENCES dbo.Bodega (BodegaId),
-    CONSTRAINT FK_Compra_Usuario   FOREIGN KEY (UsuarioId)   REFERENCES dbo.Usuario (UsuarioId),
+    CONSTRAINT FK_Compra_Proveedor FOREIGN KEY (ProveedorId) REFERENCES dbo.Proveedor (ProveedorId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Compra_Bodega    FOREIGN KEY (BodegaId)    REFERENCES dbo.Bodega (BodegaId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Compra_Usuario   FOREIGN KEY (UsuarioId)   REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Compra_Estado CHECK (Estado IN ('PENDIENTE','RECIBIDA','ANULADA'))
 );
 GO
@@ -381,8 +389,8 @@ CREATE TABLE dbo.DetalleCompra (
     Cantidad       INT           NOT NULL,
     CostoUnitario  DECIMAL(10,2) NOT NULL,   -- precio del momento
     CONSTRAINT PK_DetalleCompra PRIMARY KEY (CompraId, RepuestoId),
-    CONSTRAINT FK_DetCompra_Compra   FOREIGN KEY (CompraId)   REFERENCES dbo.Compra (CompraId),
-    CONSTRAINT FK_DetCompra_Repuesto FOREIGN KEY (RepuestoId) REFERENCES dbo.Repuesto (RepuestoId),
+    CONSTRAINT FK_DetCompra_Compra   FOREIGN KEY (CompraId)   REFERENCES dbo.Compra (CompraId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_DetCompra_Repuesto FOREIGN KEY (RepuestoId) REFERENCES dbo.Repuesto (RepuestoId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_DetCompra_Cantidad CHECK (Cantidad > 0),
     CONSTRAINT CK_DetCompra_Costo    CHECK (CostoUnitario >= 0)
 );
@@ -402,10 +410,10 @@ CREATE TABLE dbo.MovimientoInventario (
     UsuarioId             INT          NOT NULL,
     Observacion           VARCHAR(200) NULL,
     CONSTRAINT PK_MovimientoInventario PRIMARY KEY (MovimientoId),
-    CONSTRAINT FK_Movimiento_Inventario  FOREIGN KEY (RepuestoId, BodegaId) REFERENCES dbo.Inventario (RepuestoId, BodegaId),
-    CONSTRAINT FK_Movimiento_Compra      FOREIGN KEY (CompraId)             REFERENCES dbo.Compra (CompraId),
-    CONSTRAINT FK_Movimiento_Reparacion  FOREIGN KEY (ReparacionId)         REFERENCES dbo.Reparacion (ReparacionId),
-    CONSTRAINT FK_Movimiento_Usuario     FOREIGN KEY (UsuarioId)            REFERENCES dbo.Usuario (UsuarioId),
+    CONSTRAINT FK_Movimiento_Inventario  FOREIGN KEY (RepuestoId, BodegaId) REFERENCES dbo.Inventario (RepuestoId, BodegaId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Movimiento_Compra      FOREIGN KEY (CompraId)             REFERENCES dbo.Compra (CompraId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Movimiento_Reparacion  FOREIGN KEY (ReparacionId)         REFERENCES dbo.Reparacion (ReparacionId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Movimiento_Usuario     FOREIGN KEY (UsuarioId)            REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Movimiento_Tipo        CHECK (TipoMovimiento IN ('ENTRADA','SALIDA')),
     CONSTRAINT CK_Movimiento_Cantidad    CHECK (Cantidad > 0),
     CONSTRAINT CK_Movimiento_Existencia  CHECK (ExistenciaResultante >= 0),
@@ -447,8 +455,8 @@ CREATE TABLE dbo.Factura (
     CONSTRAINT PK_Factura PRIMARY KEY (FacturaId),
     CONSTRAINT UQ_Factura_NumeroFactura UNIQUE (NumeroFactura),
     CONSTRAINT UQ_Factura_Orden UNIQUE (OrdenId),
-    CONSTRAINT FK_Factura_Orden   FOREIGN KEY (OrdenId)   REFERENCES dbo.OrdenServicio (OrdenId),
-    CONSTRAINT FK_Factura_Usuario FOREIGN KEY (UsuarioId) REFERENCES dbo.Usuario (UsuarioId),
+    CONSTRAINT FK_Factura_Orden   FOREIGN KEY (OrdenId)   REFERENCES dbo.OrdenServicio (OrdenId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Factura_Usuario FOREIGN KEY (UsuarioId) REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Factura_Montos CHECK (TotalManoObra >= 0 AND TotalRepuestos >= 0 AND Subtotal >= 0 AND Impuesto >= 0),
     CONSTRAINT CK_Factura_Total  CHECK (Total = Subtotal + Impuesto),
     CONSTRAINT CK_Factura_Estado CHECK (Estado IN ('EMITIDA','PAGADA','ANULADA'))
@@ -466,9 +474,9 @@ CREATE TABLE dbo.Pago (
     Estado        VARCHAR(10)   NOT NULL CONSTRAINT DF_Pago_Estado DEFAULT ('APLICADO'),
     UsuarioId     INT           NOT NULL,   -- quién cobró
     CONSTRAINT PK_Pago PRIMARY KEY (PagoId),
-    CONSTRAINT FK_Pago_Factura    FOREIGN KEY (FacturaId)    REFERENCES dbo.Factura (FacturaId),
-    CONSTRAINT FK_Pago_MetodoPago FOREIGN KEY (MetodoPagoId) REFERENCES dbo.MetodoPago (MetodoPagoId),
-    CONSTRAINT FK_Pago_Usuario    FOREIGN KEY (UsuarioId)    REFERENCES dbo.Usuario (UsuarioId),
+    CONSTRAINT FK_Pago_Factura    FOREIGN KEY (FacturaId)    REFERENCES dbo.Factura (FacturaId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Pago_MetodoPago FOREIGN KEY (MetodoPagoId) REFERENCES dbo.MetodoPago (MetodoPagoId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Pago_Usuario    FOREIGN KEY (UsuarioId)    REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION,
     CONSTRAINT CK_Pago_Monto  CHECK (Monto > 0),
     CONSTRAINT CK_Pago_Estado CHECK (Estado IN ('APLICADO','ANULADO'))
 );
@@ -484,8 +492,8 @@ CREATE TABLE dbo.Entrega (
     Observaciones     VARCHAR(300) NULL,
     CONSTRAINT PK_Entrega PRIMARY KEY (EntregaId),
     CONSTRAINT UQ_Entrega_Orden UNIQUE (OrdenId),
-    CONSTRAINT FK_Entrega_Orden   FOREIGN KEY (OrdenId)          REFERENCES dbo.OrdenServicio (OrdenId),
-    CONSTRAINT FK_Entrega_Usuario FOREIGN KEY (UsuarioEntregaId) REFERENCES dbo.Usuario (UsuarioId)
+    CONSTRAINT FK_Entrega_Orden   FOREIGN KEY (OrdenId)          REFERENCES dbo.OrdenServicio (OrdenId) ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_Entrega_Usuario FOREIGN KEY (UsuarioEntregaId) REFERENCES dbo.Usuario (UsuarioId) ON DELETE NO ACTION ON UPDATE NO ACTION
 );
 GO
 

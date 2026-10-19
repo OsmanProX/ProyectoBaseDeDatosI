@@ -162,7 +162,12 @@ function cerrarSesion() {
         tabindex="-1"
         class="mx-auto max-w-[1500px] px-5 py-8 outline-none sm:px-8 sm:py-9"
       >
-        <RouterView />
+        <!-- Transición suave al cambiar de pantalla (clases .pagina-* en animaciones.css) -->
+        <RouterView v-slot="{ Component, route: actual }">
+          <Transition name="pagina" mode="out-in">
+            <component :is="Component" :key="actual.path" />
+          </Transition>
+        </RouterView>
       </main>
       <footer class="px-5 pb-6 text-[11px] text-muted sm:px-8">
         UMG La Florida · Plantilla para clase

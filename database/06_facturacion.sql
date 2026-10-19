@@ -289,6 +289,11 @@ BEGIN
         IF @Metodo <> 'EFECTIVO' AND (@Referencia IS NULL OR LTRIM(RTRIM(@Referencia)) = '')
             THROW 50718, 'Para tarjeta o transferencia indique el número de referencia (voucher o boleta).', 1;
 
+        -- Referencia: de 4 a 50 caracteres, solo letras, números y guiones; se guarda en mayúsculas
+        SET @Referencia = NULLIF(UPPER(LTRIM(RTRIM(@Referencia))), '');
+        IF @Referencia IS NOT NULL AND (LEN(@Referencia) < 4 OR @Referencia LIKE '%[^A-Z0-9-]%')
+            THROW 50719, 'Referencia inválida: use de 4 a 50 caracteres, solo letras, números y guiones (ej. AUT-482915).', 1;
+
         BEGIN TRANSACTION;
 
         -- Se bloquea la factura para que dos pagos al mismo tiempo no pasen del total
@@ -313,8 +318,18 @@ BEGIN
             THROW 50717, @Msg, 1;
         END;
 
+        -- El mismo voucher o boleta no se puede aplicar dos veces con el mismo método
+        IF @Referencia IS NOT NULL AND EXISTS (SELECT 1 FROM dbo.Pago WITH (UPDLOCK, HOLDLOCK)
+                                               WHERE MetodoPagoId = @MetodoPagoId
+                                                 AND Referencia = @Referencia
+                                                 AND Estado = 'APLICADO')
+        BEGIN
+            SET @Msg = CONCAT('La referencia ', @Referencia, ' ya fue usada en otro pago con ', @Metodo, '. Revise el voucher o la boleta.');
+            THROW 50720, @Msg, 1;
+        END;
+
         INSERT INTO dbo.Pago (FacturaId, MetodoPagoId, Monto, Referencia, Estado, UsuarioId)
-        VALUES (@FacturaId, @MetodoPagoId, @Monto, NULLIF(LTRIM(RTRIM(@Referencia)), ''), 'APLICADO', @UsuarioId);
+        VALUES (@FacturaId, @MetodoPagoId, @Monto, @Referencia, 'APLICADO', @UsuarioId);
 
         SET @PagoId = SCOPE_IDENTITY();
         SET @SaldoDespues = dbo.fn_SaldoFactura(@FacturaId);

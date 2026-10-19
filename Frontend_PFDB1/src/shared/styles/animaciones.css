@@ -1,0 +1,96 @@
+/* ==========================================================
+   TechCare — transiciones y animaciones
+   Optimizadas: solo se animan opacity y transform (los acelera la
+   tarjeta de video y no recalculan el diseño de la página), con
+   duraciones cortas. Si Windows tiene activado "Mostrar animaciones"
+   en apagado, la regla prefers-reduced-motion de tokens.css las quita.
+   ========================================================== */
+:root {
+  --anim-rapida: 120ms;
+  --anim-media: 200ms;
+  --anim-curva: cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+
+@keyframes tc-aparecer {
+  from { opacity: 0; transform: translateY(6px); }
+}
+@keyframes tc-entrar-modal {
+  from { opacity: 0; transform: translateY(12px) scale(0.98); }
+}
+@keyframes tc-fundido {
+  from { opacity: 0; }
+}
+@keyframes tc-aviso {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+
+/* 1. Cambio de pantalla (RouterView de MainLayout) */
+.pagina-enter-active {
+  transition: opacity var(--anim-media) var(--anim-curva), transform var(--anim-media) var(--anim-curva);
+}
+.pagina-leave-active {
+  transition: opacity var(--anim-rapida) ease-in;
+}
+.pagina-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.pagina-leave-to {
+  opacity: 0;
+}
+
+/* 2. Ventanas emergentes (dialog) y su fondo */
+dialog[open] {
+  animation: tc-entrar-modal var(--anim-media) var(--anim-curva);
+}
+dialog[open]::backdrop {
+  animation: tc-fundido var(--anim-media) ease-out;
+}
+
+/* 3. Pestañas: el panel entra suave al cambiar de pestaña */
+[role='tabpanel'] {
+  animation: tc-aparecer var(--anim-media) var(--anim-curva);
+}
+[role='tab'] {
+  transition: color var(--anim-rapida), border-color var(--anim-media), background-color var(--anim-rapida);
+}
+
+/* 4. Avisos de éxito y mensajes de error */
+[role='status'],
+[role='alert'] {
+  animation: tc-aviso var(--anim-media) var(--anim-curva);
+}
+
+/* 5. Filas nuevas de las tablas (Vue solo inserta las que cambian) */
+tbody tr {
+  animation: tc-fundido var(--anim-media) ease-out;
+}
+
+/* 6. Botones: respuesta al pasar el mouse y al hacer clic */
+.btn {
+  transition: background-color var(--anim-rapida), border-color var(--anim-rapida), color var(--anim-rapida),
+    box-shadow var(--anim-media), transform var(--anim-rapida);
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn.primario:hover:not(:disabled) {
+  box-shadow: 0 4px 12px rgb(15 42 74 / 0.25);
+}
+
+/* 7. Tarjetas e indicadores: entran escalonados y se elevan al pasar el mouse */
+.kpi,
+.resumen > div,
+.tarjeta {
+  animation: tc-aparecer var(--anim-media) var(--anim-curva) backwards;
+  transition: transform var(--anim-media) var(--anim-curva), box-shadow var(--anim-media);
+}
+.kpi:nth-child(2), .resumen > div:nth-child(2), .tarjeta:nth-child(2) { animation-delay: 30ms; }
+.kpi:nth-child(3), .resumen > div:nth-child(3), .tarjeta:nth-child(3) { animation-delay: 60ms; }
+.kpi:nth-child(4), .resumen > div:nth-child(4), .tarjeta:nth-child(4) { animation-delay: 90ms; }
+.kpi:nth-child(n + 5), .resumen > div:nth-child(n + 5), .tarjeta:nth-child(n + 5) { animation-delay: 120ms; }
+/* (las tarjetas de Caja y Taller están en una lista con scroll: solo cambian de color) */
+.kpi:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgb(15 42 74 / 0.12);
+}

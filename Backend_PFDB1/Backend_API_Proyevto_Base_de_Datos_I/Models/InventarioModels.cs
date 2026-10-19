@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace Backend_API_Proyevto_Base_de_Datos_I.Models
 {
     // ===== Semana 3: Inventario y compras (bodega) =====
@@ -94,21 +96,28 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
 
     public class LineaCompraRequest
     {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique el repuesto.")]
         public int RepuestoId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "La cantidad debe ser mayor que cero.")]
         public int Cantidad { get; set; }
+        [Range(typeof(decimal), "0", "99999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true, ErrorMessage = "El costo no puede ser negativo.")]
         public decimal CostoUnitario { get; set; }
     }
 
     public class RegistrarCompraRequest
     {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique el proveedor.")]
         public int ProveedorId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la bodega.")]
         public int BodegaId { get; set; }
         public string? Observaciones { get; set; }
+        [MinLength(1, ErrorMessage = "Agregue al menos un repuesto a la compra.")]
         public List<LineaCompraRequest> Detalle { get; set; } = new();
     }
 
     public class AnularCompraRequest
     {
+        [Required(ErrorMessage = "Indique el motivo de la anulación.")]
         public string? Motivo { get; set; }
     }
 }

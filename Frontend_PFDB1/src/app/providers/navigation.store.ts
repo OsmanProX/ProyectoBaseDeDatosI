@@ -20,4 +20,9 @@ export const staticNavigation: NavigationItem[] = [
   // Semana 3
   { id: -6, name: 'Taller', path: '/taller', icon: 'Wrench', roles: ['ADMINISTRADOR', 'TECNICO'] },
   { id: -7, name: 'Inventario', path: '/inventario', icon: 'Package', roles: ['ADMINISTRADOR', 'BODEGA'] },
+  // Semana 4
+  { id: -8, name: 'Caja y entrega', path: '/caja', icon: 'Receipt', roles: ['ADMINISTRADOR', 'CAJA', 'RECEPCION'] },
+  { id: -9, name: 'Reportes', path: '/reportes', icon: 'ChartColumn', roles: ['ADMINISTRADOR'] },
+  // Mantenimientos (6.1): repuestos y proveedores (BODEGA); bodegas y catálogos (ADMINISTRADOR)
+  { id: -10, name: 'Mantenimientos', path: '/mantenimientos', icon: 'Settings', roles: ['ADMINISTRADOR', 'BODEGA'] },
 ]

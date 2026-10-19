@@ -16,7 +16,7 @@ builder.Services.AddSingleton<DBContext>();
 builder.Services.AddScoped<JwtService>();
 
 var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key no esta configurada.");
+    ?? throw new InvalidOperationException("Jwt:Key no está configurada.");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -59,6 +59,16 @@ builder.Services.AddAuthorization(options =>
     // Semana 3 — Inventario y compras (bodega)
     options.AddPolicy("Inventario",
         p => p.RequireRole("ADMINISTRADOR", "BODEGA"));
+    // Semana 4 — Caja: facturar y cobrar (CAJA), entregar el equipo (RECEPCION)
+    options.AddPolicy("Caja",
+        p => p.RequireRole("ADMINISTRADOR", "CAJA", "RECEPCION"));
+    options.AddPolicy("Facturar",
+        p => p.RequireRole("ADMINISTRADOR", "CAJA"));
+    options.AddPolicy("EntregarEquipo",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
+    // Semana 4 — Los 12 reportes
+    options.AddPolicy("Reportes",
+        p => p.RequireRole("ADMINISTRADOR"));
 });
 
 // CORS: permite llamar a la API desde el frontend Vue en desarrollo

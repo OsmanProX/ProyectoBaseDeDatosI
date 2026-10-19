@@ -1,4 +1,4 @@
-/* ==========================================================
+﻿/* ==========================================================
    Proyecto Final - Base de Datos I (UMG)
    TechCare Solutions
    Script 08: permisos por rol + vista

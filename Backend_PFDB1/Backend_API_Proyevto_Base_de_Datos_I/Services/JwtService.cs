@@ -18,7 +18,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
         public LoginResponse GenerarToken(Usuario usuario)
         {
             var key = _configuration["Jwt:Key"]
-                ?? throw new InvalidOperationException("Jwt:Key no esta configurada.");
+                ?? throw new InvalidOperationException("Jwt:Key no está configurada.");
             var issuer = _configuration["Jwt:Issuer"];
             var audience = _configuration["Jwt:Audience"];
             var expirationMinutes = int.Parse(

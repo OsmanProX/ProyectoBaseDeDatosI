@@ -114,7 +114,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             return Ok(new
             {
                 codigo = 200,
-                mensaje = "Token valido.",
+                mensaje = "Token válido.",
                 usuario = User.Identity?.Name,
                 roles = User.Claims
                     .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
