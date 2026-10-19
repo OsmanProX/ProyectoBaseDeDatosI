@@ -230,7 +230,7 @@ GO
    Si es exitoso devuelve los datos del usuario, sus roles
    y sus permisos activos (regla: cada usuario solo ve y
    ejecuta las opciones de su rol); si falla devuelve 0 filas.
-   Usa la tabla Permiso: correr 08_permisos.sql antes de usarlo.
+   Usa las tablas RolPermiso y Permiso: correr 08_permisos.sql antes.
    ========================================================== */
 CREATE OR ALTER PROCEDURE dbo.sp_LoginUsuario
     @Correo     VARCHAR(100),
@@ -251,12 +251,16 @@ BEGIN
             FROM UsuarioRol ur
             INNER JOIN Rol r ON r.RolId = ur.RolId
             WHERE ur.UsuarioId = u.UsuarioId) AS Roles,
-           (SELECT STRING_AGG(x.permiso, ', ') WITHIN GROUP (ORDER BY x.permiso)
-            FROM (SELECT DISTINCT p.permiso
-                  FROM Permiso p
-                  INNER JOIN UsuarioRol ur ON ur.RolId = p.RolId
+           -- Un permiso puede venir por dos roles (ej. RECEPCION y CAJA):
+           -- GROUP BY lo deja una sola vez en la lista.
+           (SELECT STRING_AGG(x.Codigo, ', ') WITHIN GROUP (ORDER BY x.Codigo)
+            FROM (SELECT p.Codigo
+                  FROM UsuarioRol ur
+                  INNER JOIN RolPermiso rp ON rp.RolId    = ur.RolId
+                  INNER JOIN Permiso p     ON p.PermisoId = rp.PermisoId
                   WHERE ur.UsuarioId = u.UsuarioId
-                    AND p.activo = 1) x) AS Permisos
+                    AND p.Activo = 1
+                  GROUP BY p.Codigo) x) AS Permisos
     FROM Usuario u
     WHERE u.Correo = @Correo
       AND u.Activo = 1

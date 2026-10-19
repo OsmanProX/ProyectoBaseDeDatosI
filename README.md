@@ -41,7 +41,7 @@ El frontend **nunca** se conecta directo a SQL Server; todo pasa por la API.
 │   ├── 05_datos_prueba.sql       datos de prueba con los mínimos del enunciado (sección 7)
 │   ├── 06_facturacion.sql        facturación, pagos y entrega
 │   ├── 07_triggers_indices_reportes.sql  triggers, índices y reportes
-│   ├── 08_permisos.sql           tabla Permiso (menú y acciones por rol) → tabla 28
+│   ├── 08_permisos.sql           tablas Permiso y RolPermiso (permisos por rol, N:M) → tablas 28 y 29
 │   ├── 09_clientes_equipos_ordenes.sql   vistas y SP para crear clientes y equipos
 │   ├── 10_sp_orden_usuario.sql   listado de órdenes y de usuarios
 │   ├── 11_sp_cliente_equipo.sql  listar, actualizar, desactivar y activar clientes y equipos
@@ -53,7 +53,7 @@ El frontend **nunca** se conecta directo a SQL Server; todo pasa por la API.
 └── README.md
 ```
 
-**Contenido final de la base:** 28 tablas · 155 restricciones · 14 índices · 20 vistas · 4 funciones · 39 procedimientos · 10 triggers.
+**Contenido final de la base:** 29 tablas · 160 restricciones · 14 índices · 20 vistas · 4 funciones · 39 procedimientos · 10 triggers.
 
 ## Requisitos (computadora limpia)
 
@@ -111,7 +111,7 @@ SELECT type_desc, COUNT(*) AS Cantidad
 FROM sys.objects
 WHERE type IN ('U', 'V', 'P', 'FN', 'IF', 'TF', 'TR')
 GROUP BY type_desc;
--- Debe dar: 28 tablas, 20 vistas, 39 procedimientos y 10 triggers; las funciones (FN, IF o TF) suman 4.
+-- Debe dar: 29 tablas, 20 vistas, 39 procedimientos y 10 triggers; las funciones (FN, IF o TF) suman 4.
 ```
 
 ## Paso 2 – Backend (API)

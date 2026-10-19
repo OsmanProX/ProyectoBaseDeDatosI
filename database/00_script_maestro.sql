@@ -17,8 +17,8 @@
      12. 12_mantenimientos.sql              Mantenimientos (repuestos, proveedores, bodegas, catálogos, usuarios)
 
    ÍNDICE POR TIPO DE OBJETO (cantidad y script donde está)
-     Tablas           28  en los scripts: 01 (27), 08 (1)
-     Restricciones   155  en los scripts: 01 (153), 08 (2)
+     Tablas           29  en los scripts: 01 (27), 08 (2)
+     Restricciones   160  en los scripts: 01 (153), 08 (7)
      Índices          14  en los scripts: 01 (1), 07 (13)
      Vistas           20  en los scripts: 08 (2), 04 (8), 07 (6), 09 (3), 10 (1)
      Funciones         4  en los scripts: 04 (3), 07 (1)
@@ -71,7 +71,8 @@ GO
 --   por eso tampoco se propaga el UPDATE.
 
 -- Borrar las tablas si ya existen (al revés, por las llaves foráneas)
--- Permiso (script 08) apunta a Rol, por eso se borra primero
+-- RolPermiso y Permiso (script 08) apuntan a Rol, por eso se borran primero
+DROP TABLE IF EXISTS dbo.RolPermiso;
 DROP TABLE IF EXISTS dbo.Permiso;
 DROP TABLE IF EXISTS dbo.Entrega;
 DROP TABLE IF EXISTS dbo.Pago;
@@ -825,8 +826,8 @@ GO
 /* ##########################################################
     3/12  08_permisos.sql
    Permisos por rol (antes del 03: el login los lee)
-   Tablas (1): Permiso
-   Restricciones (2): Permiso 2
+   Tablas (2): Permiso, RolPermiso
+   Restricciones (7): DF 1, PK 2, UQ 1, CK 1, FK 2
    Vistas (2): vw_Permiso, vw_UsuarioPermiso
    ########################################################## */
 PRINT '>> 3/12 08_permisos.sql';
@@ -835,84 +836,126 @@ GO
 /* ==========================================================
    Proyecto Final - Base de Datos I (UMG)
    TechCare Solutions
-   Script 08: permisos por rol + vista
+   Script 08: permisos por rol + vistas
    Se ejecuta después del 01 y 02, y ANTES del 03
-   (sp_LoginUsuario lee la tabla Permiso)
+   (sp_LoginUsuario lee los permisos del usuario)
+
+   Modelo (enunciado 2.1: "si se implementan permisos
+   específicos, deberán modelarse relacionalmente"):
+     Permiso     catálogo: cada permiso existe UNA sola vez
+     RolPermiso  tabla asociativa N:M entre Rol y Permiso
+                 (un rol tiene varios permisos y un permiso
+                 lo pueden tener varios roles)
+   Así el nombre del permiso no se repite por cada rol (2FN/3FN)
+   y la llave compuesta (RolId, PermisoId) impide duplicados.
+   El CHECK obliga a códigos en MAYÚSCULAS y guion bajo
+   (COLLATE binario, porque la base no distingue mayúsculas).
    ========================================================== */
 
 -- Solo en Docker (en SmarterASP se deja comentado)
 -- USE TechCare;
 -- GO
 
+SET ANSI_NULLS ON;
+SET QUOTED_IDENTIFIER ON;
+GO
+
 /* ==========================================================
-   Tabla Permiso
-   Cada fila dice qué puede hacer un rol en el sistema.
+   Se borran y se vuelven a crear (son catálogos fijos,
+   el script se puede volver a ejecutar sin duplicar).
+   Primero las vistas y la tabla hija, después el catálogo.
    ========================================================== */
-IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'Permiso')
-BEGIN
-    CREATE TABLE dbo.Permiso (
-        PermisoId INT IDENTITY(1,1) NOT NULL,
-        RolId     INT NOT NULL,
-        permiso   VARCHAR(60) NOT NULL,
-        activo    BIT NOT NULL DEFAULT 1,
-        CONSTRAINT Permiso_PK PRIMARY KEY (PermisoId),
-        CONSTRAINT Permiso_Rol_FK FOREIGN KEY (RolId)
-            REFERENCES dbo.Rol(RolId) ON UPDATE CASCADE
-    );
-END;
-GO
-
--- Limpieza para poder re-ejecutar el script sin duplicar
-DELETE FROM dbo.Permiso;
+DROP VIEW IF EXISTS dbo.vw_UsuarioPermiso;
+DROP VIEW IF EXISTS dbo.vw_Permiso;
+DROP TABLE IF EXISTS dbo.RolPermiso;
+DROP TABLE IF EXISTS dbo.Permiso;
 GO
 
 /* ==========================================================
-   Permisos por rol
+   Tabla Permiso (catálogo)
    ========================================================== */
--- ADMINISTRADOR: acceso total
-INSERT INTO dbo.Permiso (RolId, permiso) VALUES
-    (1, 'VER_ORDENES'),
-    (1, 'CREAR_ORDENES'),
-    (1, 'CAMBIAR_ESTADO_ORDEN'),
-    (1, 'VER_USUARIOS');
-
--- RECEPCION: recibe equipos y registra/cambia órdenes
-INSERT INTO dbo.Permiso (RolId, permiso) VALUES
-    (2, 'VER_ORDENES'),
-    (2, 'CREAR_ORDENES'),
-    (2, 'CAMBIAR_ESTADO_ORDEN');
-
--- TECNICO: ve órdenes y avanza el estado (diagnóstico/reparación)
-INSERT INTO dbo.Permiso (RolId, permiso) VALUES
-    (3, 'VER_ORDENES'),
-    (3, 'CAMBIAR_ESTADO_ORDEN');
-
--- BODEGA: solo consulta órdenes (necesita ver repuestos usados)
-INSERT INTO dbo.Permiso (RolId, permiso) VALUES
-    (4, 'VER_ORDENES');
-
--- CAJA: solo consulta órdenes (facturación y pagos)
-INSERT INTO dbo.Permiso (RolId, permiso) VALUES
-    (5, 'VER_ORDENES');
+CREATE TABLE dbo.Permiso (
+    PermisoId   INT IDENTITY(1,1) NOT NULL,
+    Codigo      VARCHAR(60)  NOT NULL,
+    Descripcion VARCHAR(150) NULL,
+    Activo      BIT          NOT NULL CONSTRAINT DF_Permiso_Activo DEFAULT (1),
+    CONSTRAINT PK_Permiso        PRIMARY KEY (PermisoId),
+    CONSTRAINT UQ_Permiso_Codigo UNIQUE (Codigo),
+    CONSTRAINT CK_Permiso_Codigo CHECK (LEN(Codigo) >= 3 AND Codigo NOT LIKE '%[^A-Z_]%' COLLATE Latin1_General_BIN)
+);
 GO
 
 /* ==========================================================
-   vw_Permiso: permisos con el nombre del rol
+   Tabla RolPermiso (asociativa Rol N:M Permiso)
+   FK con NO ACTION, igual que todas las del modelo (R14).
+   ========================================================== */
+CREATE TABLE dbo.RolPermiso (
+    RolId     INT NOT NULL,
+    PermisoId INT NOT NULL,
+    CONSTRAINT PK_RolPermiso         PRIMARY KEY (RolId, PermisoId),
+    CONSTRAINT FK_RolPermiso_Rol     FOREIGN KEY (RolId)     REFERENCES dbo.Rol (RolId)
+        ON DELETE NO ACTION ON UPDATE NO ACTION,
+    CONSTRAINT FK_RolPermiso_Permiso FOREIGN KEY (PermisoId) REFERENCES dbo.Permiso (PermisoId)
+        ON DELETE NO ACTION ON UPDATE NO ACTION
+);
+GO
+
+/* ==========================================================
+   Catálogo de permisos
+   ========================================================== */
+INSERT INTO dbo.Permiso (Codigo, Descripcion) VALUES
+    ('VER_ORDENES',          'Ver el listado y el detalle de las órdenes de servicio'),
+    ('CREAR_ORDENES',        'Registrar una orden de servicio al recibir un equipo'),
+    ('CAMBIAR_ESTADO_ORDEN', 'Cambiar el estado de una orden (guarda historial)'),
+    ('VER_USUARIOS',         'Ver y administrar los usuarios del sistema');
+GO
+
+/* ==========================================================
+   Permisos por rol (se buscan por nombre, no por número)
+     ADMINISTRADOR  todos
+     RECEPCION      ver, crear y cambiar estado (cancelar)
+     TECNICO        ver y cambiar estado (diagnóstico/reparación)
+     BODEGA         ver (necesita los repuestos usados)
+     CAJA           ver (facturación y pagos)
+   ========================================================== */
+INSERT INTO dbo.RolPermiso (RolId, PermisoId)
+SELECT r.RolId, p.PermisoId
+FROM (VALUES
+        ('ADMINISTRADOR', 'VER_ORDENES'),
+        ('ADMINISTRADOR', 'CREAR_ORDENES'),
+        ('ADMINISTRADOR', 'CAMBIAR_ESTADO_ORDEN'),
+        ('ADMINISTRADOR', 'VER_USUARIOS'),
+        ('RECEPCION',     'VER_ORDENES'),
+        ('RECEPCION',     'CREAR_ORDENES'),
+        ('RECEPCION',     'CAMBIAR_ESTADO_ORDEN'),
+        ('TECNICO',       'VER_ORDENES'),
+        ('TECNICO',       'CAMBIAR_ESTADO_ORDEN'),
+        ('BODEGA',        'VER_ORDENES'),
+        ('CAJA',          'VER_ORDENES')
+     ) AS v (Rol, Codigo)
+INNER JOIN dbo.Rol r     ON r.Nombre = v.Rol
+INNER JOIN dbo.Permiso p ON p.Codigo = v.Codigo;
+GO
+
+/* ==========================================================
+   vw_Permiso: permisos de cada rol con su nombre
    ========================================================== */
 CREATE OR ALTER VIEW dbo.vw_Permiso
 AS
     SELECT p.PermisoId,
-           p.RolId,
-           r.Nombre AS Rol,
-           p.permiso,
-           p.activo
-    FROM dbo.Permiso p
-    INNER JOIN dbo.Rol r ON r.RolId = p.RolId;
+           rp.RolId,
+           r.Nombre      AS Rol,
+           p.Codigo      AS Permiso,
+           p.Descripcion,
+           p.Activo
+    FROM dbo.RolPermiso rp
+    INNER JOIN dbo.Rol r     ON r.RolId     = rp.RolId
+    INNER JOIN dbo.Permiso p ON p.PermisoId = rp.PermisoId;
 GO
 
 /* ==========================================================
-   vw_UsuarioPermiso: qué puede hacer cada usuario
-   (usuario x rol x permiso activo)
+   vw_UsuarioPermiso: qué puede hacer cada usuario activo
+   (Usuario -> UsuarioRol -> Rol -> RolPermiso -> Permiso)
    ========================================================== */
 CREATE OR ALTER VIEW dbo.vw_UsuarioPermiso
 AS
@@ -921,17 +964,18 @@ AS
            u.NombreCompleto,
            u.Correo,
            r.Nombre AS Rol,
-           p.permiso
+           p.Codigo AS Permiso
     FROM dbo.Usuario u
     INNER JOIN dbo.UsuarioRol ur ON ur.UsuarioId = u.UsuarioId
-    INNER JOIN dbo.Rol r ON r.RolId = ur.RolId
-    INNER JOIN dbo.Permiso p ON p.RolId = r.RolId AND p.activo = 1
+    INNER JOIN dbo.Rol r         ON r.RolId      = ur.RolId
+    INNER JOIN dbo.RolPermiso rp ON rp.RolId     = r.RolId
+    INNER JOIN dbo.Permiso p     ON p.PermisoId  = rp.PermisoId AND p.Activo = 1
     WHERE u.Activo = 1;
 GO
 
 -- Verificación
--- SELECT * FROM dbo.vw_Permiso ORDER BY RolId, PermisoId;
--- SELECT * FROM dbo.vw_UsuarioPermiso ORDER BY UsuarioId, Rol, permiso;
+-- SELECT Rol, Permiso FROM dbo.vw_Permiso ORDER BY RolId, Permiso;
+-- SELECT NombreUsuario, Rol, Permiso FROM dbo.vw_UsuarioPermiso ORDER BY UsuarioId, Permiso;
 GO
 
 /* ##########################################################
@@ -1174,7 +1218,7 @@ GO
    Si es exitoso devuelve los datos del usuario, sus roles
    y sus permisos activos (regla: cada usuario solo ve y
    ejecuta las opciones de su rol); si falla devuelve 0 filas.
-   Usa la tabla Permiso: correr 08_permisos.sql antes de usarlo.
+   Usa las tablas RolPermiso y Permiso: correr 08_permisos.sql antes.
    ========================================================== */
 CREATE OR ALTER PROCEDURE dbo.sp_LoginUsuario
     @Correo     VARCHAR(100),
@@ -1195,12 +1239,16 @@ BEGIN
             FROM UsuarioRol ur
             INNER JOIN Rol r ON r.RolId = ur.RolId
             WHERE ur.UsuarioId = u.UsuarioId) AS Roles,
-           (SELECT STRING_AGG(x.permiso, ', ') WITHIN GROUP (ORDER BY x.permiso)
-            FROM (SELECT DISTINCT p.permiso
-                  FROM Permiso p
-                  INNER JOIN UsuarioRol ur ON ur.RolId = p.RolId
+           -- Un permiso puede venir por dos roles (ej. RECEPCION y CAJA):
+           -- GROUP BY lo deja una sola vez en la lista.
+           (SELECT STRING_AGG(x.Codigo, ', ') WITHIN GROUP (ORDER BY x.Codigo)
+            FROM (SELECT p.Codigo
+                  FROM UsuarioRol ur
+                  INNER JOIN RolPermiso rp ON rp.RolId    = ur.RolId
+                  INNER JOIN Permiso p     ON p.PermisoId = rp.PermisoId
                   WHERE ur.UsuarioId = u.UsuarioId
-                    AND p.activo = 1) x) AS Permisos
+                    AND p.Activo = 1
+                  GROUP BY p.Codigo) x) AS Permisos
     FROM Usuario u
     WHERE u.Correo = @Correo
       AND u.Activo = 1

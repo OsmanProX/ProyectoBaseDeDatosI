@@ -17,7 +17,8 @@
 --   por eso tampoco se propaga el UPDATE.
 
 -- Borrar las tablas si ya existen (al revés, por las llaves foráneas)
--- Permiso (script 08) apunta a Rol, por eso se borra primero
+-- RolPermiso y Permiso (script 08) apuntan a Rol, por eso se borran primero
+DROP TABLE IF EXISTS dbo.RolPermiso;
 DROP TABLE IF EXISTS dbo.Permiso;
 DROP TABLE IF EXISTS dbo.Entrega;
 DROP TABLE IF EXISTS dbo.Pago;
