@@ -9,4 +9,4 @@
 | `Documento_Normalizacion.pdf` | 1FN, 2FN y 3FN de las 4 áreas (órdenes, inventario y compras, facturación, seguridad), igual a las 29 tablas implementadas | ✅ |
 | `Manual_Tecnico.pdf` | Instalación y componentes | Semana 4 |
 | `Manual_Usuario.pdf` | Flujos con capturas | Semana 4 |
-| `Plan_de_Pruebas.pdf` | Casos T01–T14 con evidencia | Semana 4 |
+| `Plan_de_Pruebas.pdf` | Casos T01–T14: escenario, pasos, datos, resultado esperado y obtenido, con capturas como evidencia | ✅ |
