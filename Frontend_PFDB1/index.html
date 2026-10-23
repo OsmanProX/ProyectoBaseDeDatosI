@@ -6,9 +6,22 @@
     <meta name="theme-color" content="#4F46E5" />
     <meta
       name="description"
-      content="Administración de usuarios, roles y menús de UMG La Florida"
+      content="TechCare Solutions: servicio técnico, inventario y facturación"
     />
-    <title>La Florida · Administración</title>
+    <title>TechCare Solutions</title>
+    <!-- Aplica el tema guardado (o el de Windows) antes de cargar Vue, para que no parpadee en blanco -->
+    <script>
+      try {
+        var t = localStorage.getItem('umg-theme')
+        if (t ? t === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
+    <!-- Color de fondo mientras carga el CSS de la app (mismos valores que tokens.css) -->
+    <style>
+      html { background: rgb(248 250 252); color-scheme: light; }
+      html.dark { background: rgb(11 17 32); color-scheme: dark; }
+    </style>
   </head>
   <body>
     <div id="app"></div>

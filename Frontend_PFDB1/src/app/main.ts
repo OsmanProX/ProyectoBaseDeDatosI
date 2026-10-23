@@ -4,6 +4,7 @@ import '@fontsource/inter/latin-500.css'
 import '@fontsource/inter/latin-600.css'
 import '@fontsource/inter/latin-700.css'
 import '@/shared/styles/tokens.css'
+import '@/shared/styles/animaciones.css'
 import App from './App.vue'
 import { installProviders } from './providers'
 const app = createApp(App)

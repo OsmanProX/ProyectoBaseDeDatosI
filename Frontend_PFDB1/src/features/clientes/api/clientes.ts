@@ -1,6 +1,7 @@
 // Acceso a la API de clientes (ClienteController). Pantalla de Jeyling conectada a la API.
 // Rutas: GET /api/cliente?busqueda=, POST /api/cliente/crear,
-//        PUT /api/cliente/actualizar, DELETE /api/cliente/eliminar/{id} (pasa a INACTIVO)
+//        PUT /api/cliente/actualizar, DELETE /api/cliente/eliminar/{id} (pasa a INACTIVO),
+//        PUT /api/cliente/activar/{id} (vuelve a ACTIVO)
 import { apiFetch, ApiFetchError as ApiError } from '@/core/api/apiFetch'
 
 // Con VITE_USE_MOCK=true la pantalla usa datos de prueba en memoria (sin API ni base de datos)
@@ -72,6 +73,9 @@ const apiReal = {
   desactivar(id: number) {
     return request<unknown>(`/api/cliente/eliminar/${id}`, { method: 'DELETE' })
   },
+  activar(id: number) {
+    return request<unknown>(`/api/cliente/activar/${id}`, { method: 'PUT' })
+  },
 }
 
 // ---------- Datos de prueba (los mismos de 02_datos_iniciales.sql) ----------
@@ -115,6 +119,12 @@ const apiDemo = {
     const c = demoClientes.find((x) => x.clienteId === id)
     if (!c) throw new ApiError('Cliente no encontrado.', 404)
     c.estado = 'INACTIVO'
+  },
+  async activar(id: number): Promise<void> {
+    await esperar()
+    const c = demoClientes.find((x) => x.clienteId === id)
+    if (!c) throw new ApiError('Cliente no encontrado.', 404)
+    c.estado = 'ACTIVO'
   },
 }
 

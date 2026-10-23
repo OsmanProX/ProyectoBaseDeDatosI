@@ -15,8 +15,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<DBContext>();
 builder.Services.AddScoped<JwtService>();
 
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key no esta configurada.");
+// Las claves no están en appsettings.json: se leen de los secretos de usuario (README, paso 2).
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrWhiteSpace(jwtKey))
+    throw new InvalidOperationException("Jwt:Key no está configurada. Guárdela en los secretos de usuario (ver README, paso 2).");
 
 builder.Services
     .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
@@ -53,6 +55,22 @@ builder.Services.AddAuthorization(options =>
         p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
     options.AddPolicy("GestionarEquipos",
         p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
+    // Semana 3 — Taller: diagnóstico, reparación, actividades y repuestos (técnicos)
+    options.AddPolicy("Taller",
+        p => p.RequireRole("ADMINISTRADOR", "TECNICO"));
+    // Semana 3 — Inventario y compras (bodega)
+    options.AddPolicy("Inventario",
+        p => p.RequireRole("ADMINISTRADOR", "BODEGA"));
+    // Semana 4 — Caja: facturar y cobrar (CAJA), entregar el equipo (RECEPCION)
+    options.AddPolicy("Caja",
+        p => p.RequireRole("ADMINISTRADOR", "CAJA", "RECEPCION"));
+    options.AddPolicy("Facturar",
+        p => p.RequireRole("ADMINISTRADOR", "CAJA"));
+    options.AddPolicy("EntregarEquipo",
+        p => p.RequireRole("ADMINISTRADOR", "RECEPCION"));
+    // Semana 4 — Los 12 reportes
+    options.AddPolicy("Reportes",
+        p => p.RequireRole("ADMINISTRADOR"));
 });
 
 // CORS: permite llamar a la API desde el frontend Vue en desarrollo

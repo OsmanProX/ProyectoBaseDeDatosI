@@ -163,6 +163,23 @@ async function desactivar() {
     desactivando.value = false
   }
 }
+
+// ---------- activar (deshace el desactivar; el cliente debe estar activo) ----------
+const activando = ref<number | null>(null)
+
+async function activar(e: Equipo) {
+  activando.value = e.equipoId
+  errorLista.value = ''
+  try {
+    await equiposApi.activar(e.equipoId)
+    mostrarAviso(`Equipo ${e.numeroSerie} activo de nuevo.`)
+    await cargar()
+  } catch (err) {
+    errorLista.value = (err as Error).message
+  } finally {
+    activando.value = null
+  }
+}
 </script>
 
 <template>
@@ -231,6 +248,14 @@ async function desactivar() {
                   <button class="btn enlace" @click="abrirEditar(e)">Editar</button>
                   <button class="btn enlace peligro" @click="pedirDesactivar(e)">Desactivar</button>
                 </template>
+                <button
+                  v-else-if="puedeEditar"
+                  class="btn enlace"
+                  :disabled="activando === e.equipoId"
+                  @click="activar(e)"
+                >
+                  {{ activando === e.equipoId ? 'Activando…' : 'Activar' }}
+                </button>
               </td>
             </tr>
           </template>

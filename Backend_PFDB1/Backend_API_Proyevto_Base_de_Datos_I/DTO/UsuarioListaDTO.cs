@@ -22,8 +22,13 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 await connection.OpenAsync();
 
                 // vw_UsuarioLista (script 10): usuarios con sus roles ya concatenados.
+                // RolIds: los Id de sus roles, para el formulario de edición.
                 var lista = await connection.QueryAsync<UsuarioListaModel>(
-                    "SELECT UsuarioId, NombreUsuario, NombreCompleto, Correo, Telefono, Activo, Roles FROM vw_UsuarioLista ORDER BY UsuarioId");
+                    @"SELECT v.UsuarioId, v.NombreUsuario, v.NombreCompleto, v.Correo, v.Telefono, v.Activo, v.Roles,
+                             (SELECT STRING_AGG(CAST(ur.RolId AS VARCHAR(10)), ',')
+                              FROM UsuarioRol ur WHERE ur.UsuarioId = v.UsuarioId) AS RolIds
+                      FROM vw_UsuarioLista v
+                      ORDER BY v.UsuarioId");
 
                 respuesta.codigo = 200;
                 respuesta.mensaje = "Operación realizada exitosamente.";

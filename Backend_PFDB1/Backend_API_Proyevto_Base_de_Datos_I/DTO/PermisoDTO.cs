@@ -25,7 +25,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 await connection.OpenAsync();
 
                 string sql = @"
-                    SELECT PermisoId, RolId, Rol, permiso, activo
+                    SELECT PermisoId, RolId, Rol, Permiso AS permiso, Descripcion AS descripcion, Activo AS activo
                     FROM vw_Permiso
                     WHERE (@RolId IS NULL OR RolId = @RolId)
                     ORDER BY RolId, PermisoId";
@@ -45,6 +45,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
 
         // Lee vw_UsuarioPermiso: permisos activos de UN usuario (usuario x rol x permiso).
         // Devuelve solo los códigos de permiso, p. ej. VER_ORDENES.
+        // GROUP BY: si dos roles del usuario dan el mismo permiso, sale una vez.
         public async Task<ResponseDto> ConsultarPorUsuario(int usuarioId)
         {
             ResponseDto respuesta = new();
@@ -54,10 +55,11 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 await connection.OpenAsync();
 
                 string sql = @"
-                    SELECT permiso
+                    SELECT Permiso
                     FROM vw_UsuarioPermiso
                     WHERE UsuarioId = @usuarioId
-                    ORDER BY permiso;";
+                    GROUP BY Permiso
+                    ORDER BY Permiso;";
 
                 var lista = await connection.QueryAsync<string>(sql, new { usuarioId });
 

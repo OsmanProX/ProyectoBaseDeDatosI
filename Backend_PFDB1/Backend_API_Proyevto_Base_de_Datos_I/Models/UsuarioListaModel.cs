@@ -10,5 +10,6 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
         public string? Telefono { get; set; }
         public bool Activo { get; set; }
         public string? Roles { get; set; }
+        public string? RolIds { get; set; }   // ej. "2,5"
     }
 }
