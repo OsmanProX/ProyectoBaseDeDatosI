@@ -1,4 +1,4 @@
-/* ==========================================================
+﻿/* ==========================================================
    Proyecto Final - Base de Datos I (UMG)
    TechCare Solutions
    Script 09: SPs básicos y vistas de clientes, equipos y órdenes
@@ -97,10 +97,10 @@ BEGIN
 
     BEGIN TRY
         IF @TipoCliente NOT IN ('INDIVIDUAL', 'EMPRESARIAL')
-            THROW 50301, 'Tipo de cliente invalido. Use INDIVIDUAL o EMPRESARIAL.', 1;
+            THROW 50301, 'Tipo de cliente inválido. Use INDIVIDUAL o EMPRESARIAL.', 1;
 
         IF @NombreRazonSocial IS NULL OR LTRIM(RTRIM(@NombreRazonSocial)) = ''
-            THROW 50302, 'El nombre o razon social es obligatorio.', 1;
+            THROW 50302, 'El nombre o razón social es obligatorio.', 1;
 
         IF @NIT IS NULL OR LTRIM(RTRIM(@NIT)) = ''
             THROW 50303, 'El NIT es obligatorio.', 1;
@@ -144,16 +144,16 @@ BEGIN
     BEGIN TRY
         IF NOT EXISTS (SELECT 1 FROM dbo.Cliente
                        WHERE ClienteId = @ClienteId AND Estado = 'ACTIVO')
-            THROW 50311, 'El cliente no existe o esta inactivo.', 1;
+            THROW 50311, 'El cliente no existe o está inactivo.', 1;
 
         IF NOT EXISTS (SELECT 1 FROM dbo.TipoEquipo WHERE TipoEquipoId = @TipoEquipoId)
             THROW 50312, 'El tipo de equipo no existe.', 1;
 
         IF @NumeroSerie IS NULL OR LTRIM(RTRIM(@NumeroSerie)) = ''
-            THROW 50313, 'El numero de serie es obligatorio.', 1;
+            THROW 50313, 'El número de serie es obligatorio.', 1;
 
         IF EXISTS (SELECT 1 FROM dbo.Equipo WHERE NumeroSerie = @NumeroSerie)
-            THROW 50314, 'Ya existe un equipo con ese numero de serie.', 1;
+            THROW 50314, 'Ya existe un equipo con ese número de serie.', 1;
 
         INSERT INTO dbo.Equipo (ClienteId, TipoEquipoId, Marca, Modelo, NumeroSerie, Descripcion)
         VALUES (@ClienteId, @TipoEquipoId, @Marca, @Modelo,

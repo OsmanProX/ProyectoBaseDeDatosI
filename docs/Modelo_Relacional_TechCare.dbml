@@ -1,0 +1,516 @@
+// ==========================================================
+// TechCare Solutions — Modelo relacional (Base de Datos I, UMG)
+// Código DBML para https://dbdiagram.io  (pegar todo en el editor de la izquierda)
+// Generado desde database/01_tablas.sql, 08_permisos.sql y 07 (índices):
+// 29 tablas · 44 llaves foráneas · todas ON DELETE/UPDATE NO ACTION
+// ==========================================================
+
+Project TechCare {
+  database_type: 'SQL Server'
+  Note: 'Sistema integral de servicio técnico, inventario y facturación. Script maestro: database/00_script_maestro.sql'
+}
+
+// ---------------- Seguridad ----------------
+Table Usuario [headercolor: #2F5D9B] {
+  UsuarioId       int            [pk, increment]
+  NombreUsuario   varchar(30)    [not null, unique]
+  ContrasenaHash  varchar(255)   [not null]
+  NombreCompleto  varchar(100)   [not null]
+  Correo          varchar(100)   [not null, unique]
+  Telefono        varchar(15)    [null]
+  Activo          bit            [not null, default: 1]
+  FechaCreacion   datetime       [not null, default: `GETDATE()`]
+}
+
+Table UsuarioRol [headercolor: #2F5D9B] {
+  UsuarioId        int            [not null]
+  RolId            int            [not null]
+  FechaAsignacion  datetime       [not null, default: `GETDATE()`]
+  indexes {
+    (UsuarioId, RolId) [pk]
+  }
+}
+
+Table Rol [headercolor: #2F5D9B] {
+  RolId        int            [pk, increment]
+  Nombre       varchar(30)    [not null, unique]
+  Descripcion  varchar(100)   [null]
+  Activo       bit            [not null, default: 1]
+}
+
+Table RolPermiso [headercolor: #2F5D9B] {
+  RolId      int            [not null]
+  PermisoId  int            [not null]
+  indexes {
+    (RolId, PermisoId) [pk]
+  }
+}
+
+Table Permiso [headercolor: #2F5D9B] {
+  PermisoId    int            [pk, increment]
+  Codigo       varchar(60)    [not null, unique]
+  Descripcion  varchar(150)   [null]
+  Activo       bit            [not null, default: 1]
+  Note: '''
+    Restricciones CHECK:
+    - CK_Permiso_Codigo: (LEN(Codigo) >= 3 AND Codigo NOT LIKE '%[^A-Z_]%' COLLATE Latin1_General_BIN)
+  '''
+}
+
+// ---------------- Clientes y equipos ----------------
+Table Cliente [headercolor: #3B7D3A] {
+  ClienteId          int            [pk, increment]
+  TipoCliente        varchar(15)    [not null]
+  NombreRazonSocial  varchar(150)   [not null]
+  NIT                varchar(15)    [not null]
+  Telefono           varchar(15)    [not null]
+  Correo             varchar(100)   [null]
+  Direccion          varchar(200)   [null]
+  Estado             varchar(10)    [not null, default: 'ACTIVO']
+  FechaRegistro      datetime       [not null, default: `GETDATE()`]
+  indexes {
+    NIT [unique, name: 'UX_Cliente_NIT', note: 'filtrado: WHERE NIT <> \'CF\'']
+    NombreRazonSocial [name: 'IX_Cliente_Nombre']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Cliente_TipoCliente: (TipoCliente IN ('INDIVIDUAL','EMPRESARIAL'))
+    - CK_Cliente_Estado: (Estado IN ('ACTIVO','INACTIVO'))
+  '''
+}
+
+Table TipoEquipo [headercolor: #3B7D3A] {
+  TipoEquipoId  int            [pk, increment]
+  Nombre        varchar(50)    [not null, unique]
+}
+
+Table Equipo [headercolor: #3B7D3A] {
+  EquipoId      int            [pk, increment]
+  ClienteId     int            [not null]
+  TipoEquipoId  int            [not null]
+  Marca         varchar(50)    [not null]
+  Modelo        varchar(50)    [not null]
+  NumeroSerie   varchar(50)    [not null, unique]
+  Descripcion   varchar(200)   [null]
+  Estado        varchar(10)    [not null, default: 'ACTIVO']
+  indexes {
+    ClienteId [name: 'IX_Equipo_Cliente']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Equipo_Estado: (Estado IN ('ACTIVO','INACTIVO'))
+  '''
+}
+
+// ---------------- Ordenes de servicio ----------------
+Table OrdenServicio [headercolor: #B5651D] {
+  OrdenId             int            [pk, increment]
+  NumeroOrden         varchar(15)    [not null, unique]
+  ClienteId           int            [not null]
+  EquipoId            int            [not null]
+  UsuarioRecepcionId  int            [not null]
+  FechaIngreso        datetime       [not null, default: `GETDATE()`]
+  ProblemaReportado   varchar(500)   [not null]
+  Prioridad           varchar(10)    [not null, default: 'MEDIA']
+  EstadoOrdenId       int            [not null, default: 1]
+  FechaEstimada       date           [null]
+  Observaciones       varchar(500)   [null]
+  indexes {
+    (EstadoOrdenId, Prioridad) [name: 'IX_OrdenServicio_Estado_Prioridad', note: 'INCLUDE (FechaIngreso, ClienteId, EquipoId)']
+    (EquipoId, FechaIngreso) [name: 'IX_OrdenServicio_Equipo_Fecha']
+    (ClienteId, FechaIngreso) [name: 'IX_OrdenServicio_Cliente_Fecha']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Orden_Prioridad: (Prioridad IN ('BAJA','MEDIA','ALTA','URGENTE'))
+  '''
+}
+
+Table EstadoOrden [headercolor: #B5651D] {
+  EstadoOrdenId  int            [pk]
+  Codigo         varchar(30)    [not null, unique]
+  Descripcion    varchar(100)   [null]
+}
+
+Table HistorialEstadoOrden [headercolor: #B5651D] {
+  HistorialId       int            [pk, increment]
+  OrdenId           int            [not null]
+  EstadoAnteriorId  int            [null]
+  EstadoNuevoId     int            [not null]
+  FechaCambio       datetime       [not null, default: `GETDATE()`]
+  UsuarioId         int            [not null]
+  Observacion       varchar(300)   [null]
+  indexes {
+    (OrdenId, FechaCambio) [name: 'IX_HistorialEstadoOrden_Orden_Fecha']
+  }
+}
+
+Table Entrega [headercolor: #B5651D] {
+  EntregaId         int            [pk, increment]
+  OrdenId           int            [not null, unique]
+  UsuarioEntregaId  int            [not null]
+  NombreRecibe      varchar(100)   [not null]
+  FechaEntrega      datetime       [not null, default: `GETDATE()`]
+  Observaciones     varchar(300)   [null]
+}
+
+// ---------------- Diagnostico y reparacion ----------------
+Table Diagnostico [headercolor: #A23B3B] {
+  DiagnosticoId          int            [pk, increment]
+  OrdenId                int            [not null, unique]
+  TecnicoId              int            [not null]
+  FechaDiagnostico       datetime       [not null, default: `GETDATE()`]
+  Descripcion            varchar(500)   [not null]
+  CostoManoObraEstimado  decimal(10,2)  [not null, default: 0]
+  Observaciones          varchar(300)   [null]
+  indexes {
+    (TecnicoId, FechaDiagnostico) [name: 'IX_Diagnostico_Tecnico_Fecha']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Diagnostico_Costo: (CostoManoObraEstimado >= 0)
+  '''
+}
+
+Table Reparacion [headercolor: #A23B3B] {
+  ReparacionId        int            [pk, increment]
+  DiagnosticoId       int            [not null, unique]
+  TecnicoId           int            [not null]
+  FechaInicio         datetime       [not null, default: `GETDATE()`]
+  FechaFin            datetime       [null]
+  DescripcionTrabajo  varchar(500)   [null]
+  CostoManoObra       decimal(10,2)  [not null, default: 0]
+  Estado              varchar(12)    [not null, default: 'EN_PROCESO']
+  indexes {
+    (TecnicoId, FechaInicio) [name: 'IX_Reparacion_Tecnico_Fecha']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Reparacion_Fechas: (FechaFin IS NULL OR FechaFin >= FechaInicio)
+    - CK_Reparacion_Costo: (CostoManoObra >= 0)
+    - CK_Reparacion_Estado: (Estado IN ('EN_PROCESO','FINALIZADA','CANCELADA'))
+  '''
+}
+
+Table ActividadReparacion [headercolor: #A23B3B] {
+  ReparacionId     int            [not null]
+  NumeroActividad  int            [not null]
+  Descripcion      varchar(300)   [not null]
+  HorasTrabajadas  decimal(5,2)   [null]
+  FechaRegistro    datetime       [not null, default: `GETDATE()`]
+  indexes {
+    (ReparacionId, NumeroActividad) [pk]
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Actividad_Numero: (NumeroActividad > 0)
+    - CK_Actividad_Horas: (HorasTrabajadas IS NULL OR HorasTrabajadas > 0)
+  '''
+}
+
+Table ReparacionRepuesto [headercolor: #A23B3B] {
+  ReparacionId         int            [not null]
+  RepuestoId           int            [not null]
+  BodegaId             int            [not null]
+  Cantidad             int            [not null]
+  CostoUnitario        decimal(10,2)  [not null]
+  PrecioVentaUnitario  decimal(10,2)  [not null]
+  FechaRegistro        datetime       [not null, default: `GETDATE()`]
+  UsuarioId            int            [not null]
+  indexes {
+    (ReparacionId, RepuestoId, BodegaId) [pk]
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_RepRep_Cantidad: (Cantidad > 0)
+    - CK_RepRep_Precios: (CostoUnitario >= 0 AND PrecioVentaUnitario >= 0)
+  '''
+}
+
+// ---------------- Repuestos e inventario ----------------
+Table Categoria [headercolor: #6B4A93] {
+  CategoriaId  int            [pk, increment]
+  Nombre       varchar(50)    [not null, unique]
+  Descripcion  varchar(150)   [null]
+  Activo       bit            [not null, default: 1]
+}
+
+Table Repuesto [headercolor: #6B4A93] {
+  RepuestoId              int            [pk, increment]
+  CategoriaId             int            [not null]
+  Codigo                  varchar(20)    [not null, unique]
+  Nombre                  varchar(100)   [not null]
+  Descripcion             varchar(200)   [null]
+  PrecioCompraReferencia  decimal(10,2)  [not null]
+  PrecioVenta             decimal(10,2)  [not null]
+  Estado                  varchar(10)    [not null, default: 'ACTIVO']
+  Note: '''
+    Restricciones CHECK:
+    - CK_Repuesto_Precios: (PrecioCompraReferencia >= 0 AND PrecioVenta >= 0)
+    - CK_Repuesto_Estado: (Estado IN ('ACTIVO','INACTIVO'))
+  '''
+}
+
+Table AuditoriaPrecio [headercolor: #6B4A93] {
+  AuditoriaId           int            [pk, increment]
+  RepuestoId            int            [not null]
+  PrecioCompraAnterior  decimal(10,2)  [null]
+  PrecioCompraNuevo     decimal(10,2)  [null]
+  PrecioVentaAnterior   decimal(10,2)  [null]
+  PrecioVentaNuevo      decimal(10,2)  [null]
+  FechaCambio           datetime       [not null, default: `GETDATE()`]
+  UsuarioBD             varchar(100)   [not null, default: `SUSER_SNAME()`]
+}
+
+Table Bodega [headercolor: #6B4A93] {
+  BodegaId   int            [pk, increment]
+  Nombre     varchar(50)    [not null, unique]
+  Ubicacion  varchar(150)   [null]
+  Activo     bit            [not null, default: 1]
+}
+
+Table Inventario [headercolor: #6B4A93] {
+  RepuestoId          int            [not null]
+  BodegaId            int            [not null]
+  Existencia          int            [not null, default: 0]
+  StockMinimo         int            [not null, default: 0]
+  FechaActualizacion  datetime       [not null, default: `GETDATE()`]
+  indexes {
+    (RepuestoId, BodegaId) [pk]
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Inventario_Existencia: (Existencia >= 0)
+    - CK_Inventario_StockMinimo: (StockMinimo >= 0)
+  '''
+}
+
+Table MovimientoInventario [headercolor: #6B4A93] {
+  MovimientoId          int            [pk, increment]
+  RepuestoId            int            [not null]
+  BodegaId              int            [not null]
+  TipoMovimiento        varchar(10)    [not null]
+  Cantidad              int            [not null]
+  ExistenciaResultante  int            [not null]
+  CompraId              int            [null]
+  ReparacionId          int            [null]
+  FechaMovimiento       datetime       [not null, default: `GETDATE()`]
+  UsuarioId             int            [not null]
+  Observacion           varchar(200)   [null]
+  indexes {
+    FechaMovimiento [name: 'IX_MovimientoInventario_Fecha', note: 'INCLUDE (TipoMovimiento, RepuestoId, BodegaId, Cantidad)']
+    (RepuestoId, BodegaId, FechaMovimiento) [name: 'IX_MovimientoInventario_Repuesto_Bodega']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Movimiento_Tipo: (TipoMovimiento IN ('ENTRADA','SALIDA'))
+    - CK_Movimiento_Cantidad: (Cantidad > 0)
+    - CK_Movimiento_Existencia: (ExistenciaResultante >= 0)
+    - CK_Movimiento_Origen: ( (CompraId IS NOT NULL AND ReparacionId IS NULL) OR (CompraId IS NULL AND ReparacionId IS NOT NULL) )
+  '''
+}
+
+// ---------------- Proveedores y compras ----------------
+Table Proveedor [headercolor: #2A7B76] {
+  ProveedorId  int            [pk, increment]
+  NIT          varchar(15)    [not null, unique]
+  Nombre       varchar(150)   [not null]
+  Contacto     varchar(100)   [null]
+  Telefono     varchar(15)    [not null]
+  Correo       varchar(100)   [null]
+  Direccion    varchar(200)   [null]
+  Estado       varchar(10)    [not null, default: 'ACTIVO']
+  Note: '''
+    Restricciones CHECK:
+    - CK_Proveedor_Estado: (Estado IN ('ACTIVO','INACTIVO'))
+  '''
+}
+
+Table ProveedorRepuesto [headercolor: #2A7B76] {
+  ProveedorId       int            [not null]
+  RepuestoId        int            [not null]
+  CodigoProveedor   varchar(30)    [null]
+  PrecioReferencia  decimal(10,2)  [null]
+  indexes {
+    (ProveedorId, RepuestoId) [pk]
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_ProvRep_Precio: (PrecioReferencia IS NULL OR PrecioReferencia >= 0)
+  '''
+}
+
+Table Compra [headercolor: #2A7B76] {
+  CompraId        int            [pk, increment]
+  NumeroCompra    varchar(20)    [not null, unique]
+  ProveedorId     int            [not null]
+  BodegaId        int            [not null]
+  FechaCompra     datetime       [not null, default: `GETDATE()`]
+  FechaRecepcion  datetime       [null]
+  Estado          varchar(10)    [not null, default: 'PENDIENTE']
+  UsuarioId       int            [not null]
+  Observaciones   varchar(300)   [null]
+  indexes {
+    (ProveedorId, FechaCompra) [name: 'IX_Compra_Proveedor_Fecha', note: 'INCLUDE (Estado)']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Compra_Estado: (Estado IN ('PENDIENTE','RECIBIDA','ANULADA'))
+  '''
+}
+
+Table DetalleCompra [headercolor: #2A7B76] {
+  CompraId       int            [not null]
+  RepuestoId     int            [not null]
+  Cantidad       int            [not null]
+  CostoUnitario  decimal(10,2)  [not null]
+  indexes {
+    (CompraId, RepuestoId) [pk]
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_DetCompra_Cantidad: (Cantidad > 0)
+    - CK_DetCompra_Costo: (CostoUnitario >= 0)
+  '''
+}
+
+// ---------------- Facturacion y pagos ----------------
+Table Factura [headercolor: #8C6D00] {
+  FacturaId          int            [pk, increment]
+  NumeroFactura      varchar(20)    [not null, unique]
+  OrdenId            int            [not null, unique]
+  NITFacturacion     varchar(15)    [not null]
+  NombreFacturacion  varchar(150)   [not null]
+  FechaEmision       datetime       [not null, default: `GETDATE()`]
+  TotalManoObra      decimal(10,2)  [not null]
+  TotalRepuestos     decimal(10,2)  [not null]
+  Subtotal           decimal(10,2)  [not null]
+  Impuesto           decimal(10,2)  [not null]
+  Total              decimal(10,2)  [not null]
+  Estado             varchar(10)    [not null, default: 'EMITIDA']
+  UsuarioId          int            [not null]
+  indexes {
+    FechaEmision [name: 'IX_Factura_FechaEmision', note: 'INCLUDE (Estado, TotalManoObra, TotalRepuestos, Subtotal, Impuesto, Total)']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Factura_Montos: (TotalManoObra >= 0 AND TotalRepuestos >= 0 AND Subtotal >= 0 AND Impuesto >= 0)
+    - CK_Factura_Total: (Total = Subtotal + Impuesto)
+    - CK_Factura_Estado: (Estado IN ('EMITIDA','PAGADA','ANULADA'))
+  '''
+}
+
+Table Pago [headercolor: #8C6D00] {
+  PagoId        int            [pk, increment]
+  FacturaId     int            [not null]
+  MetodoPagoId  int            [not null]
+  Monto         decimal(10,2)  [not null]
+  FechaPago     datetime       [not null, default: `GETDATE()`]
+  Referencia    varchar(50)    [null]
+  Estado        varchar(10)    [not null, default: 'APLICADO']
+  UsuarioId     int            [not null]
+  indexes {
+    (FacturaId, Estado) [name: 'IX_Pago_Factura', note: 'INCLUDE (Monto)']
+  }
+  Note: '''
+    Restricciones CHECK:
+    - CK_Pago_Monto: (Monto > 0)
+    - CK_Pago_Estado: (Estado IN ('APLICADO','ANULADO'))
+  '''
+}
+
+Table MetodoPago [headercolor: #8C6D00] {
+  MetodoPagoId  int            [pk, increment]
+  Nombre        varchar(30)    [not null, unique]
+  Activo        bit            [not null, default: 1]
+}
+
+// ---------------- Relaciones (hijo > padre = muchos a uno; - = uno a uno) ----------------
+Ref FK_UsuarioRol_Usuario: UsuarioRol.UsuarioId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_UsuarioRol_Rol: UsuarioRol.RolId > Rol.RolId [delete: no action, update: no action]
+Ref FK_RolPermiso_Rol: RolPermiso.RolId > Rol.RolId [delete: no action, update: no action]
+Ref FK_RolPermiso_Permiso: RolPermiso.PermisoId > Permiso.PermisoId [delete: no action, update: no action]
+Ref FK_Equipo_Cliente: Equipo.ClienteId > Cliente.ClienteId [delete: no action, update: no action]
+Ref FK_Equipo_TipoEquipo: Equipo.TipoEquipoId > TipoEquipo.TipoEquipoId [delete: no action, update: no action]
+Ref FK_Orden_Cliente: OrdenServicio.ClienteId > Cliente.ClienteId [delete: no action, update: no action]
+Ref FK_Orden_Equipo: OrdenServicio.EquipoId > Equipo.EquipoId [delete: no action, update: no action]
+Ref FK_Orden_Usuario: OrdenServicio.UsuarioRecepcionId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_Orden_EstadoOrden: OrdenServicio.EstadoOrdenId > EstadoOrden.EstadoOrdenId [delete: no action, update: no action]
+Ref FK_Historial_Orden: HistorialEstadoOrden.OrdenId > OrdenServicio.OrdenId [delete: no action, update: no action]
+Ref FK_Historial_EstadoAnterior: HistorialEstadoOrden.EstadoAnteriorId > EstadoOrden.EstadoOrdenId [delete: no action, update: no action]
+Ref FK_Historial_EstadoNuevo: HistorialEstadoOrden.EstadoNuevoId > EstadoOrden.EstadoOrdenId [delete: no action, update: no action]
+Ref FK_Historial_Usuario: HistorialEstadoOrden.UsuarioId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_Entrega_Orden: Entrega.OrdenId - OrdenServicio.OrdenId [delete: no action, update: no action]
+Ref FK_Entrega_Usuario: Entrega.UsuarioEntregaId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_Diagnostico_Orden: Diagnostico.OrdenId - OrdenServicio.OrdenId [delete: no action, update: no action]
+Ref FK_Diagnostico_Tecnico: Diagnostico.TecnicoId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_Reparacion_Diagnostico: Reparacion.DiagnosticoId - Diagnostico.DiagnosticoId [delete: no action, update: no action]
+Ref FK_Reparacion_Tecnico: Reparacion.TecnicoId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_Actividad_Reparacion: ActividadReparacion.ReparacionId > Reparacion.ReparacionId [delete: no action, update: no action]
+Ref FK_RepRep_Reparacion: ReparacionRepuesto.ReparacionId > Reparacion.ReparacionId [delete: no action, update: no action]
+Ref FK_RepRep_Inventario: ReparacionRepuesto.(RepuestoId, BodegaId) > Inventario.(RepuestoId, BodegaId) [delete: no action, update: no action]
+Ref FK_RepRep_Usuario: ReparacionRepuesto.UsuarioId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_Repuesto_Categoria: Repuesto.CategoriaId > Categoria.CategoriaId [delete: no action, update: no action]
+Ref FK_Auditoria_Repuesto: AuditoriaPrecio.RepuestoId > Repuesto.RepuestoId [delete: no action, update: no action]
+Ref FK_Inventario_Repuesto: Inventario.RepuestoId > Repuesto.RepuestoId [delete: no action, update: no action]
+Ref FK_Inventario_Bodega: Inventario.BodegaId > Bodega.BodegaId [delete: no action, update: no action]
+Ref FK_Movimiento_Inventario: MovimientoInventario.(RepuestoId, BodegaId) > Inventario.(RepuestoId, BodegaId) [delete: no action, update: no action]
+Ref FK_Movimiento_Compra: MovimientoInventario.CompraId > Compra.CompraId [delete: no action, update: no action]
+Ref FK_Movimiento_Reparacion: MovimientoInventario.ReparacionId > Reparacion.ReparacionId [delete: no action, update: no action]
+Ref FK_Movimiento_Usuario: MovimientoInventario.UsuarioId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_ProvRep_Proveedor: ProveedorRepuesto.ProveedorId > Proveedor.ProveedorId [delete: no action, update: no action]
+Ref FK_ProvRep_Repuesto: ProveedorRepuesto.RepuestoId > Repuesto.RepuestoId [delete: no action, update: no action]
+Ref FK_Compra_Proveedor: Compra.ProveedorId > Proveedor.ProveedorId [delete: no action, update: no action]
+Ref FK_Compra_Bodega: Compra.BodegaId > Bodega.BodegaId [delete: no action, update: no action]
+Ref FK_Compra_Usuario: Compra.UsuarioId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_DetCompra_Compra: DetalleCompra.CompraId > Compra.CompraId [delete: no action, update: no action]
+Ref FK_DetCompra_Repuesto: DetalleCompra.RepuestoId > Repuesto.RepuestoId [delete: no action, update: no action]
+Ref FK_Factura_Orden: Factura.OrdenId - OrdenServicio.OrdenId [delete: no action, update: no action]
+Ref FK_Factura_Usuario: Factura.UsuarioId > Usuario.UsuarioId [delete: no action, update: no action]
+Ref FK_Pago_Factura: Pago.FacturaId > Factura.FacturaId [delete: no action, update: no action]
+Ref FK_Pago_MetodoPago: Pago.MetodoPagoId > MetodoPago.MetodoPagoId [delete: no action, update: no action]
+Ref FK_Pago_Usuario: Pago.UsuarioId > Usuario.UsuarioId [delete: no action, update: no action]
+
+TableGroup Seguridad {
+  Usuario
+  UsuarioRol
+  Rol
+  RolPermiso
+  Permiso
+}
+TableGroup Clientes_y_equipos {
+  Cliente
+  TipoEquipo
+  Equipo
+}
+TableGroup Ordenes_de_servicio {
+  OrdenServicio
+  EstadoOrden
+  HistorialEstadoOrden
+  Entrega
+}
+TableGroup Diagnostico_y_reparacion {
+  Diagnostico
+  Reparacion
+  ActividadReparacion
+  ReparacionRepuesto
+}
+TableGroup Repuestos_e_inventario {
+  Categoria
+  Repuesto
+  AuditoriaPrecio
+  Bodega
+  Inventario
+  MovimientoInventario
+}
+TableGroup Proveedores_y_compras {
+  Proveedor
+  ProveedorRepuesto
+  Compra
+  DetalleCompra
+}
+TableGroup Facturacion_y_pagos {
+  Factura
+  Pago
+  MetodoPago
+}

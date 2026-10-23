@@ -124,6 +124,65 @@ BEGIN
 END;
 GO
 
+/* ----------------------------------------------------------
+   Triggers de protección financiera (R12, R16 y 2.7)
+   Los procedimientos ya validan estas reglas; los triggers son
+   la última barrera si alguien inserta o actualiza directo desde
+   SQL Server. Trabajan por conjuntos (varias filas a la vez).
+   ---------------------------------------------------------- */
+
+-- R12: la suma de pagos nunca puede pasar del total de la factura
+CREATE OR ALTER TRIGGER dbo.trg_Pago_NoExcederTotal
+ON dbo.Pago
+AFTER INSERT, UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1
+               FROM (SELECT FacturaId FROM inserted GROUP BY FacturaId) AS i
+               WHERE dbo.fn_SaldoFactura(i.FacturaId) < 0)
+        THROW 50807, 'La suma de los pagos no puede exceder el total de la factura.', 1;
+END;
+GO
+
+-- 2.7: no se entrega un equipo sin factura o con saldo pendiente
+CREATE OR ALTER TRIGGER dbo.trg_Entrega_SinSaldo
+ON dbo.Entrega
+AFTER INSERT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF EXISTS (SELECT 1
+               FROM inserted e
+               LEFT JOIN dbo.Factura f ON f.OrdenId = e.OrdenId AND f.Estado <> 'ANULADA'
+               WHERE f.FacturaId IS NULL
+                  OR dbo.fn_SaldoFactura(f.FacturaId) > 0)
+        THROW 50808, 'No se puede registrar la entrega: la orden no tiene factura o tiene saldo pendiente.', 1;
+END;
+GO
+
+-- 2.8: una orden solo pasa a ENTREGADO si existe su entrega
+-- (sp_EntregarOrden inserta la entrega antes de cambiar el estado)
+CREATE OR ALTER TRIGGER dbo.trg_OrdenServicio_EntregadoConEntrega
+ON dbo.OrdenServicio
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+    IF NOT UPDATE(EstadoOrdenId)
+        RETURN;
+
+    IF EXISTS (SELECT 1
+               FROM inserted i
+               JOIN deleted d       ON d.OrdenId = i.OrdenId
+               LEFT JOIN dbo.Entrega en ON en.OrdenId = i.OrdenId
+               WHERE i.EstadoOrdenId = 6
+                 AND d.EstadoOrdenId <> 6
+                 AND en.EntregaId IS NULL)
+        THROW 50809, 'Una orden solo pasa a ENTREGADO registrando la entrega (sp_EntregarOrden).', 1;
+END;
+GO
+
 /* ==========================================================
    ================= ÍNDICES NO AGRUPADOS ===================
    Las PK, UNIQUE y el NIT ya tienen su propio índice.

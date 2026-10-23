@@ -132,5 +132,23 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
                 return StatusCode(500, new { codigo = 500, mensaje = "Eliminar(): " + ex.Message });
             }
         }
+
+        // PUT: api/cliente/activar/5  (vuelve a ACTIVO lo que se desactivó)
+        [Authorize(Policy = "GestionarClientes")]
+        [HttpPut("activar/{id:int}")]
+        public async Task<IActionResult> Activar(int id)
+        {
+            try
+            {
+                var request = new ClienteDTO();
+                request.SetConexion(_dbConnectionFactory);
+                var respuesta = await request.Activar(id);
+                return StatusCode(respuesta.codigo, new { respuesta.codigo, respuesta.mensaje });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { codigo = 500, mensaje = "Activar(): " + ex.Message });
+            }
+        }
     }
 }

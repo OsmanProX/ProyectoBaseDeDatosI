@@ -230,5 +230,33 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             }
             return respuesta;
         }
+
+        // Vuelve a ACTIVO con sp_Cliente_Activar (script 12)
+        public async Task<ResponseDto> Activar(int id)
+        {
+            ResponseDto respuesta = new();
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+
+                await connection.ExecuteAsync(
+                    "sp_Cliente_Activar",
+                    new { ClienteId = id },
+                    commandType: System.Data.CommandType.StoredProcedure);
+
+                respuesta.codigo = 200;
+                respuesta.mensaje = "Cliente activado exitosamente.";
+            }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "Activar(): " + ex.Message };
+            }
+            catch (Exception ex)
+            {
+                respuesta = new ResponseDto { codigo = 500, mensaje = "Activar(): " + ex.Message };
+            }
+            return respuesta;
+        }
     }
 }

@@ -1,4 +1,4 @@
-/* ==========================================================
+﻿/* ==========================================================
    Proyecto Final - Base de Datos I (UMG)
    TechCare Solutions
    Script 11: SPs de clientes y equipos (listar, actualizar, eliminar)
@@ -69,10 +69,10 @@ BEGIN
             THROW 51101, 'El cliente no existe.', 1;
 
         IF @TipoCliente NOT IN ('INDIVIDUAL', 'EMPRESARIAL')
-            THROW 51102, 'Tipo de cliente invalido. Use INDIVIDUAL o EMPRESARIAL.', 1;
+            THROW 51102, 'Tipo de cliente inválido. Use INDIVIDUAL o EMPRESARIAL.', 1;
 
         IF @NombreRazonSocial IS NULL OR LTRIM(RTRIM(@NombreRazonSocial)) = ''
-            THROW 51103, 'El nombre o razon social es obligatorio.', 1;
+            THROW 51103, 'El nombre o razón social es obligatorio.', 1;
 
         IF @NIT IS NULL OR LTRIM(RTRIM(@NIT)) = ''
             THROW 51104, 'El NIT es obligatorio.', 1;
@@ -115,7 +115,7 @@ BEGIN
 
         IF EXISTS (SELECT 1 FROM dbo.OrdenServicio
                    WHERE ClienteId = @ClienteId AND EstadoOrdenId NOT IN (6, 7))
-            THROW 51112, 'El cliente tiene ordenes abiertas. Cierre o cancele esas ordenes primero.', 1;
+            THROW 51112, 'El cliente tiene órdenes abiertas. Cierre o cancele esas órdenes primero.', 1;
 
         UPDATE dbo.Cliente SET Estado = 'INACTIVO' WHERE ClienteId = @ClienteId;
 
@@ -180,17 +180,17 @@ BEGIN
 
         IF NOT EXISTS (SELECT 1 FROM dbo.Cliente
                        WHERE ClienteId = @ClienteId AND Estado = 'ACTIVO')
-            THROW 51122, 'El cliente no existe o esta inactivo.', 1;
+            THROW 51122, 'El cliente no existe o está inactivo.', 1;
 
         IF NOT EXISTS (SELECT 1 FROM dbo.TipoEquipo WHERE TipoEquipoId = @TipoEquipoId)
             THROW 51123, 'El tipo de equipo no existe.', 1;
 
         IF @NumeroSerie IS NULL OR LTRIM(RTRIM(@NumeroSerie)) = ''
-            THROW 51124, 'El numero de serie es obligatorio.', 1;
+            THROW 51124, 'El número de serie es obligatorio.', 1;
 
         IF EXISTS (SELECT 1 FROM dbo.Equipo
                    WHERE NumeroSerie = @NumeroSerie AND EquipoId <> @EquipoId)
-            THROW 51125, 'Ya existe otro equipo con ese numero de serie.', 1;
+            THROW 51125, 'Ya existe otro equipo con ese número de serie.', 1;
 
         UPDATE dbo.Equipo
         SET ClienteId    = @ClienteId,
@@ -226,7 +226,7 @@ BEGIN
 
         IF EXISTS (SELECT 1 FROM dbo.OrdenServicio
                    WHERE EquipoId = @EquipoId AND EstadoOrdenId NOT IN (6, 7))
-            THROW 51132, 'El equipo tiene ordenes abiertas. Cierre o cancele esas ordenes primero.', 1;
+            THROW 51132, 'El equipo tiene órdenes abiertas. Cierre o cancele esas órdenes primero.', 1;
 
         UPDATE dbo.Equipo SET Estado = 'INACTIVO' WHERE EquipoId = @EquipoId;
 

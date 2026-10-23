@@ -37,12 +37,12 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                     {
                         respuesta.codigo = 401;
                         respuesta.data = null;
-                        respuesta.mensaje = "Correo o contrasena incorrectos.";
+                        respuesta.mensaje = "Correo o contraseña incorrectos.";
                         return respuesta;
                     }
 
                     respuesta.codigo = 200;
-                    respuesta.mensaje = "Operacion realizada exitosamente.";
+                    respuesta.mensaje = "Operación realizada exitosamente.";
                     respuesta.data = new
                     {
                         usuario.UsuarioId,

@@ -38,7 +38,7 @@ public class TestController : ControllerBase
             return StatusCode(500, new
             {
                 conectado = false,
-                error = "No se encontro la cadena de conexion DefaultConnection."
+                error = "No se encontró la cadena de conexión DefaultConnection. Guárdela en los secretos de usuario (ver README, paso 2)."
             });
         }
 
