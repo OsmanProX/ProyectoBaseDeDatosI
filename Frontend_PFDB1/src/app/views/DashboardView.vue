@@ -22,10 +22,12 @@ const saludo = computed(() => {
   return h < 12 ? 'Buenos días' : h < 18 ? 'Buenas tardes' : 'Buenas noches'
 })
 
-// Accesos según el rol (mismos roles que el menú)
+// Accesos según el rol (mismos roles y mismo orden que el menú)
 const accesos = computed(() => {
   const r = auth.rol
   const lista = [
+    { a: '/clientes', t: 'Clientes', d: 'Registrar clientes y sus datos de contacto', roles: ['ADMINISTRADOR', 'RECEPCION'] },
+    { a: '/equipos', t: 'Equipos', d: 'Equipos de cada cliente y su número de serie', roles: ['ADMINISTRADOR', 'RECEPCION'] },
     { a: '/ordenes', t: 'Órdenes', d: 'Recibir equipos y ver su estado', roles: ['ADMINISTRADOR', 'RECEPCION', 'TECNICO', 'BODEGA', 'CAJA'] },
     { a: '/taller', t: 'Taller', d: 'Diagnóstico y reparación', roles: ['ADMINISTRADOR', 'TECNICO'] },
     { a: '/inventario', t: 'Inventario', d: 'Existencias y compras', roles: ['ADMINISTRADOR', 'BODEGA'] },

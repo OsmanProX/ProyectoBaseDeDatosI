@@ -264,7 +264,7 @@ async function cambiarEstado() {
 
     <!-- Nueva orden -->
     <dialog ref="dlgNueva" class="modal">
-      <form @submit.prevent="guardarNueva" novalidate>
+      <form novalidate @submit.prevent="guardarNueva">
         <h2>Nueva orden de servicio</h2>
         <p class="nota">Recibe: <b>{{ usuario.nombreCompleto }}</b> ({{ usuario.rol }})</p>
         <p v-if="errorNueva" class="error" role="alert">{{ errorNueva }}</p>
@@ -282,8 +282,11 @@ async function cambiarEstado() {
 
         <label class="campo">
           <span>Equipo</span>
-          <select v-model.number="nueva.equipoId" :disabled="!nueva.clienteId || cargandoEquipos"
-                  :aria-invalid="!!errores.equipoId">
+          <select
+            v-model.number="nueva.equipoId"
+            :disabled="!nueva.clienteId || cargandoEquipos"
+            :aria-invalid="!!errores.equipoId"
+          >
             <option :value="0" disabled>
               {{ !nueva.clienteId ? 'Primero seleccione el cliente' : cargandoEquipos ? 'Cargando equipos…'
                 : equipos.length ? 'Seleccione un equipo…' : 'El cliente no tiene equipos registrados' }}
@@ -297,9 +300,13 @@ async function cambiarEstado() {
 
         <label class="campo">
           <span>Problema reportado</span>
-          <textarea v-model="nueva.problemaReportado" rows="3" maxlength="500"
-                    placeholder="Lo que dice el cliente que le pasa al equipo"
-                    :aria-invalid="!!errores.problemaReportado"></textarea>
+          <textarea
+            v-model="nueva.problemaReportado"
+            rows="3"
+            maxlength="500"
+            placeholder="Lo que dice el cliente que le pasa al equipo"
+            :aria-invalid="!!errores.problemaReportado"
+          ></textarea>
           <small v-if="errores.problemaReportado">{{ errores.problemaReportado }}</small>
         </label>
 
@@ -319,8 +326,12 @@ async function cambiarEstado() {
 
         <label class="campo">
           <span>Observaciones (opcional)</span>
-          <textarea v-model="nueva.observaciones" rows="2" maxlength="500"
-                    placeholder="Accesorios que deja, estado físico, etc."></textarea>
+          <textarea
+            v-model="nueva.observaciones"
+            rows="2"
+            maxlength="500"
+            placeholder="Accesorios que deja, estado físico, etc."
+          ></textarea>
         </label>
 
         <div class="botones">
@@ -377,7 +388,7 @@ async function cambiarEstado() {
         <p v-else-if="actual.estadoId === 5" class="nota">
           La orden está lista. El paso a Entregado se hace desde Entrega, después de facturar y pagar.
         </p>
-        <form v-else-if="puedeCambiarEstado && actual.estadoId !== 5" class="cambio" @submit.prevent="cambiarEstado" novalidate>
+        <form v-else-if="puedeCambiarEstado && actual.estadoId !== 5" class="cambio" novalidate @submit.prevent="cambiarEstado">
           <p v-if="errorCambio" class="error" role="alert">{{ errorCambio }}</p>
           <div class="fila">
             <label class="campo">
@@ -389,8 +400,11 @@ async function cambiarEstado() {
             </label>
             <label class="campo">
               <span>Observación {{ estadoNuevoId === 7 ? '(obligatoria)' : '(opcional)' }}</span>
-              <input v-model="observacion" maxlength="300"
-                     :placeholder="estadoNuevoId === 7 ? 'Motivo de la cancelación' : ''" />
+              <input
+                v-model="observacion"
+                maxlength="300"
+                :placeholder="estadoNuevoId === 7 ? 'Motivo de la cancelación' : ''"
+              />
             </label>
           </div>
           <p class="nota">Cambia: <b>{{ usuario.nombreCompleto }}</b> ({{ usuario.rol }})</p>

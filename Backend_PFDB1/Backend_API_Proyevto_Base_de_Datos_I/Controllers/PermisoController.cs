@@ -20,6 +20,8 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
 
         // GET: api/permiso           (todos los permisos)
         // GET: api/permiso?rolId=2   (permisos de un rol)
+        // Solo ADMINISTRADOR: cada usuario consulta los suyos con /api/permiso/mios
+        [Authorize(Roles = "ADMINISTRADOR")]
         [HttpGet]
         public async Task<IActionResult> Consultar([FromQuery] int? rolId)
         {

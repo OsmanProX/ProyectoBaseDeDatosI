@@ -101,6 +101,113 @@ function descargarCsv() {
   URL.revokeObjectURL(a.href)
 }
 
+// Imprimir o guardar como PDF: arma una hoja limpia (solo el reporte, sin menú ni botones)
+// y abre la ventana de imprimir del navegador. Ahí se elige «Guardar como PDF».
+const ENTIDADES: Record<string, string> = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }
+const esc = (v: unknown) => String(v ?? '').replace(/[&<>"]/g, (ch) => ENTIDADES[ch] ?? ch)
+const fechaCorta = (iso: string) => iso.split('-').reverse().join('/')
+
+function filtrosAplicados() {
+  const r = actual.value
+  const lista: string[] = []
+  if (r.buscar && filtros.buscar.trim()) lista.push(`${r.obligatorio ? 'Orden' : 'Buscar'}: ${filtros.buscar.trim()}`)
+  if (r.fechas && filtros.desde) lista.push(`Desde: ${fechaCorta(filtros.desde)}`)
+  if (r.fechas && filtros.hasta) lista.push(`Hasta: ${fechaCorta(filtros.hasta)}`)
+  if (r.estados && filtros.estado) {
+    lista.push(`Estado: ${r.estados.find((e) => e.valor === filtros.estado)?.texto ?? filtros.estado}`)
+  }
+  if (r.bodega && filtros.bodegaId) {
+    lista.push(`Bodega: ${bodegas.value.find((b) => b.bodegaId === filtros.bodegaId)?.nombre ?? filtros.bodegaId}`)
+  }
+  return lista.length ? lista.join(' · ') : 'Sin filtros'
+}
+
+function tablaHtml(cols: string[], datos: Fila[], pie = '') {
+  const enc = cols.map((c) => `<th class="${esMoneda(c) ? 'der' : ''}">${esc(etiqueta(c))}</th>`).join('')
+  const cuerpo = datos
+    .map((f) => `<tr>${cols
+      .map((c) => `<td class="${esMoneda(c) || typeof f[c] === 'number' ? 'der' : ''}">${esc(valor(c, f[c] ?? null))}</td>`)
+      .join('')}</tr>`)
+    .join('')
+  return `<table><thead><tr>${enc}</tr></thead><tbody>${cuerpo}</tbody>${pie}</table>`
+}
+
+function imprimirPdf() {
+  const r = actual.value
+  let contenido = ''
+  if (r.numero === 12) {
+    if (!traza.value?.resumen) return
+    const ficha = Object.entries(traza.value.resumen)
+      .map(([k, v]) => `<div><dt>${esc(etiqueta(k))}</dt><dd>${esc(valor(k, v))}</dd></div>`)
+      .join('')
+    contenido = `<dl class="ficha">${ficha}</dl><h3>Línea de tiempo</h3>`
+      + tablaHtml(['fecha', 'etapa', 'detalle', 'usuario', 'monto'], traza.value.lineaTiempo)
+  } else {
+    if (!filas.value.length) return
+    const cols = columnas.value
+    const pie = hayTotales.value
+      ? `<tfoot><tr>${cols
+        .map((c, i) => (c in totales.value
+          ? `<td class="der"><b>${esc(valor(c, totales.value[c] ?? 0))}</b></td>`
+          : `<td>${i === 0 ? '<b>Total</b>' : ''}</td>`))
+        .join('')}</tr></tfoot>`
+      : ''
+    contenido = `<p class="nota">${filas.value.length} registro(s)</p>` + tablaHtml(cols, filas.value, pie)
+  }
+
+  const nombre = `Reporte_${String(r.numero).padStart(2, '0')}_${r.titulo.replace(/\s+/g, '_')}`
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${esc(nombre)}</title><style>
+    @page { size: landscape; margin: 12mm; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; font: 11px/1.4 Arial, Helvetica, sans-serif; color: #222b38; }
+    header { border-bottom: 2px solid #c8962e; padding-bottom: 8px; margin-bottom: 12px; }
+    .marca { margin: 0; font-size: 10px; color: #5a6472; text-transform: uppercase; letter-spacing: .08em; }
+    h1 { margin: 2px 0; font: 700 18px Georgia, 'Times New Roman', serif; color: #17375e; }
+    h3 { margin: 14px 0 6px; font-size: 13px; color: #17375e; }
+    .sub, .nota { margin: 2px 0; color: #5a6472; }
+    .nota { margin-bottom: 6px; }
+    table { width: 100%; border-collapse: collapse; }
+    thead { display: table-header-group; }
+    tr { break-inside: avoid; }
+    th { background: #17375e; color: #fff; text-align: left; padding: 5px 6px; }
+    td { padding: 4px 6px; border-bottom: 1px solid #d0d7e2; vertical-align: top; }
+    tbody tr:nth-child(even) td { background: #f4f6fa; }
+    tfoot td { border-top: 2px solid #17375e; }
+    .der { text-align: right; }
+    .ficha { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px 14px; margin: 0;
+      border: 1px solid #d0d7e2; padding: 10px; }
+    dt { color: #5a6472; font-size: 10px; }
+    dd { margin: 0; font-weight: 700; }
+  </style></head><body>
+    <header>
+      <p class="marca">TechCare Solutions · Servicio técnico</p>
+      <h1>${r.numero}. ${esc(r.titulo)}</h1>
+      <p class="sub">${esc(r.descripcion)}</p>
+      <p class="sub">Filtros: ${esc(filtrosAplicados())} · Generado: ${esc(new Date().toLocaleString('es-GT'))}</p>
+    </header>
+    ${contenido}
+  </body></html>`
+
+  // Se imprime desde un marco invisible para que no salgan el menú ni los botones
+  document.getElementById('marco-impresion')?.remove()
+  const marco = document.createElement('iframe')
+  marco.id = 'marco-impresion'
+  marco.setAttribute('aria-hidden', 'true')
+  marco.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0'
+  marco.onload = () => {
+    const w = marco.contentWindow
+    if (!w) return
+    const tituloOriginal = document.title
+    document.title = nombre // nombre sugerido del archivo PDF
+    w.onafterprint = () => marco.remove()
+    w.focus()
+    w.print()
+    document.title = tituloOriginal
+  }
+  marco.srcdoc = html
+  document.body.appendChild(marco)
+}
+
 onMounted(async () => {
   generar()
   try {
@@ -172,6 +279,9 @@ onMounted(async () => {
             <button type="button" class="btn" @click="limpiar">Limpiar</button>
             <button type="button" class="btn" :disabled="!(filas.length || traza?.lineaTiempo.length)" @click="descargarCsv">
               Descargar CSV
+            </button>
+            <button type="button" class="btn" :disabled="!(filas.length || traza?.resumen)" @click="imprimirPdf">
+              Imprimir / PDF
             </button>
           </div>
         </form>

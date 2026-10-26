@@ -3,13 +3,13 @@ import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   ChevronRight,
-  GraduationCap,
   LogOut,
   Menu as MenuIcon,
   Moon,
   PanelRightClose,
   PanelRightOpen,
   Sun,
+  Wrench,
   X,
 } from 'lucide-vue-next'
 import { useThemeStore } from '@/app/providers/theme.store'
@@ -32,6 +32,9 @@ const navItems = computed(() =>
       (!item.permiso || auth.tienePermiso(item.permiso)) &&
       (!item.roles || item.roles.includes(auth.rol)),
   ))
+// Se muestra el título de la sección solo en el primer elemento de cada grupo
+const conTitulo = (index: number) =>
+  index > 0 && navItems.value[index]?.grupo !== navItems.value[index - 1]?.grupo
 
 function cerrarSesion() {
   auth.logout()
@@ -66,12 +69,12 @@ function cerrarSesion() {
         <div
           class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-white"
         >
-          <GraduationCap class="h-6 w-6" />
+          <Wrench class="h-6 w-6" />
         </div>
         <div v-if="!collapsed" class="min-w-0">
-          <p class="text-sm font-semibold">La Florida<span class="text-primary">.</span></p>
+          <p class="text-sm font-semibold">TechCare<span class="text-primary">.</span></p>
           <p class="mt-0.5 text-[10px] font-medium uppercase tracking-[0.15em] text-muted">
-            Plantilla de clase
+            Servicio técnico
           </p>
         </div>
         <button
@@ -85,19 +88,23 @@ function cerrarSesion() {
       <div class="flex-1 overflow-y-auto p-3">
         <p v-if="!collapsed" class="eyebrow px-3 pb-3 pt-5 text-[10px]">Navegación</p>
         <nav>
-          <RouterLink
-            v-for="item in navItems"
-            :key="item.id"
-            :to="item.path"
-            :aria-label="item.name"
-            :title="collapsed ? item.name : undefined"
-            class="mb-1 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted hover:bg-primary/5 hover:text-primary"
-            exact-active-class="!bg-primary/10 !font-medium !text-primary"
-            @click="mobileOpen = false"
-          >
-            <component :is="resolveIcon(item.icon)" class="h-[18px] w-[18px] shrink-0" />
-            <span v-if="!collapsed">{{ item.name }}</span>
-          </RouterLink>
+          <template v-for="(item, index) in navItems" :key="item.id">
+            <p v-if="conTitulo(index) && !collapsed" class="eyebrow px-3 pb-2 pt-4 text-[10px]">
+              {{ item.grupo }}
+            </p>
+            <hr v-else-if="conTitulo(index)" class="mx-3 my-2 border-border" />
+            <RouterLink
+              :to="item.path"
+              :aria-label="item.name"
+              :title="collapsed ? item.name : undefined"
+              class="mb-1 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted hover:bg-primary/5 hover:text-primary"
+              exact-active-class="!bg-primary/10 !font-medium !text-primary"
+              @click="mobileOpen = false"
+            >
+              <component :is="resolveIcon(item.icon)" class="h-[18px] w-[18px] shrink-0" />
+              <span v-if="!collapsed">{{ item.name }}</span>
+            </RouterLink>
+          </template>
         </nav>
       </div>
       <div class="border-t border-border p-3">
@@ -170,7 +177,7 @@ function cerrarSesion() {
         </RouterView>
       </main>
       <footer class="px-5 pb-6 text-[11px] text-muted sm:px-8">
-        UMG La Florida · Plantilla para clase
+        TechCare Solutions · Proyecto final de Base de Datos I · UMG
       </footer>
     </div>
   </div>

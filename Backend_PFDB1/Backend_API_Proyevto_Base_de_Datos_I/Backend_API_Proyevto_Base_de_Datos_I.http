@@ -1,4 +1,4 @@
-@Backend_API_Proyevto_Base_de_Datos_I_HostAddress = http://localhost:5245
+@Backend_API_Proyevto_Base_de_Datos_I_HostAddress = http://localhost:5247
 
 GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/test
 Accept: application/json
@@ -10,10 +10,6 @@ Accept: application/json
 
 ###
 
-GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/token-demo
-Accept: application/json
-
-###
 # Login con correo (devuelve el JWT) - usa sp_LoginUsuario
 POST {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/login
 Content-Type: application/json
@@ -25,7 +21,7 @@ Content-Type: application/json
 
 ###
 
-# Reemplazar TOKEN con el valor devuelto por /api/auth/login o /api/auth/token-demo
+# Reemplazar TOKEN con el valor devuelto por /api/auth/login
 GET {{Backend_API_Proyevto_Base_de_Datos_I_HostAddress}}/api/auth/perfil
 Authorization: Bearer TOKEN
 Accept: application/json
