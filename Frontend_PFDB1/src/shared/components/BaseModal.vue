@@ -84,7 +84,7 @@ onBeforeUnmount(() => {
           /></span>
           <div>
             <p class="mb-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted">
-              La Florida · Administración
+              TechCare Solutions
             </p>
             <h2 :id="titleId" class="text-lg font-semibold">{{ title }}</h2>
           </div>
