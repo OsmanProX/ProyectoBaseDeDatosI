@@ -51,7 +51,8 @@ export async function apiFetch<T>(
   const body = (await res.json().catch(() => ({}))) as RespuestaApi<T>
   if (!res.ok || (body.codigo !== undefined && body.codigo >= 400)) {
     const validacion = body.errors ? Object.values(body.errors).flat().join(' ') : ''
-    const mensaje = validacion || body.mensaje || 'Ocurrió un error inesperado.'
+    const sinPermiso = res.status === 403 ? 'Su usuario no tiene permiso para realizar esta acción.' : ''
+    const mensaje = validacion || body.mensaje || sinPermiso || 'Ocurrió un error inesperado.'
     throw new ApiFetchError(traducir(sinPrefijo(mensaje)), res.status)
   }
   return body.data as T

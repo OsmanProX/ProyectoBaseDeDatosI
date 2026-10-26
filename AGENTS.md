@@ -25,10 +25,10 @@ bun run build    # vue-tsc + vite build
 
 - Structure mirrors a class-demo pattern: `BD/` (DBContext factory), `DTO/` (DTOs hold their own data access via `SetConexion(DBContext)` + Dapper; they return `ResponseDto { codigo, mensaje, data }`), `Models/`, `Services/` (JwtService), `Controllers/`.
 - Controllers wrap every call in try/catch and return `ResponseDto`-shaped bodies; error codes live in the body (`codigo`), not only the HTTP status.
-- Connection string: `DefaultConnection` in `appsettings.json` points to the **Azure SQL** DB (`sql5113.site4now.net`), not the local Docker one. Do not switch it to localhost:1441 without asking.
-- JWT config lives in `appsettings.json` under `Jwt` (Key/Issuer/Audience/ExpirationMinutes). `Program.cs` requires `Jwt:Key` at startup — removing it breaks the app.
+- Connection string: `DefaultConnection` lives in .NET user secrets (`UserSecretsId` techcare-backend-pfdb1), not in `appsettings.json` (its values are empty). It points to the SmarterASP DB (`sql5113.site4now.net`), not the local Docker one. Do not switch it to localhost:1441 without asking.
+- JWT config: Issuer/Audience/ExpirationMinutes in `appsettings.json`; `Jwt:Key` in user secrets. `Program.cs` requires `Jwt:Key` at startup — removing it breaks the app.
 - Login (`POST /api/auth/login`) takes `{ correo, password }` and calls stored procedure `sp_LoginUsuario`: it compares SHA256 hex of the password with `ContrasenaHash` and returns the user's data + roles on success, 0 rows on failure. Always use Dapper parameters — never string-concatenate SQL (an older demo project this was based on had SQL injection; do not copy that pattern).
-- `GET /api/auth/token-demo` issues a test JWT without DB; `GET /api/auth/perfil` is `[Authorize]` and validates tokens.
+- `GET /api/auth/perfil` is `[Authorize]` and validates tokens. There is no demo token endpoint: every token comes from a real login.
 - Pipeline order in `Program.cs`: `UseSwagger` → `UseAuthentication` → `UseAuthorization` (authentication middleware must stay before authorization).
 
 ## Gotchas

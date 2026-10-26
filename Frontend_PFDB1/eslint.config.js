@@ -12,6 +12,10 @@ export default tseslint.config(
   {
     files: ['**/*.{js,ts,vue}'],
     languageOptions: { globals: { ...globals.browser, ...globals.node } },
+    rules: {
+      // Permite quitar campos con { campo: _x, ...resto } sin marcarlo como variable sin uso
+      '@typescript-eslint/no-unused-vars': ['error', { ignoreRestSiblings: true }],
+    },
   },
   {
     files: ['**/*.vue'],

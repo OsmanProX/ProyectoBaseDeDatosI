@@ -82,29 +82,6 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             }
         }
 
-        // GET: api/auth/token-demo
-        // Genera un JWT de prueba sin consultar la base de datos.
-        [HttpGet("token-demo")]
-        public IActionResult GenerarTokenDemo()
-        {
-            var usuario = new Usuario
-            {
-                Id = 0,
-                UsuarioLogin = "demo",
-                Rol = "DEMO"
-            };
-
-            var loginResponse = _jwtService.GenerarToken(usuario);
-
-            return Ok(new
-            {
-                codigo = 200,
-                mensaje = "Token de prueba generado.",
-                token = loginResponse.Token,
-                expira = loginResponse.Expira
-            });
-        }
-
         // GET: api/auth/perfil
         // Endpoint protegido: requiere Authorization: Bearer <token>.
         [Authorize]
