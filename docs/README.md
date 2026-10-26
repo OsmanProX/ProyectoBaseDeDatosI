@@ -8,5 +8,5 @@
 | `Diagramas_de_Flujo/` | Flujos 01 al 05 + archivo .drawio editable | ✅ |
 | `Documento_Normalizacion.pdf` | 1FN, 2FN y 3FN de las 4 áreas (órdenes, inventario y compras, facturación, seguridad), igual a las 29 tablas implementadas | ✅ |
 | `Manual_Tecnico.pdf` | Arquitectura, tecnologías, estructura, instalación, seguridad, componentes de la BD (tablas, SP, funciones, vistas, triggers e índices) y problemas comunes | ✅ |
-| `Manual_Usuario.pdf` | Flujos con capturas | Semana 4 |
+| `Manual_Usuario.pdf` | Flujos con capturas: ingreso, orden de servicio, diagnóstico, reparación, compra de repuestos, facturación, pago y entrega, y reportes | ✅ |
 | `Plan_de_Pruebas.pdf` | Casos T01–T14: escenario, pasos, datos, resultado esperado y obtenido, con capturas como evidencia | ✅ |
