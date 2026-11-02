@@ -31,7 +31,7 @@ async function enviar() {
           <KeyRound class="h-7 w-7" />
         </span>
         <h1 class="mt-4 text-2xl font-semibold">¿Olvidó su contraseña?</h1>
-        <p class="mt-1.5 text-sm text-muted">Le enviaremos una contraseña temporal a su correo</p>
+        <p class="mt-1.5 text-sm text-muted">Le enviaremos una contraseña a su correo</p>
       </div>
 
       <p v-if="listo" class="mt-7 text-sm" role="status">{{ listo }}</p>
@@ -40,7 +40,7 @@ async function enviar() {
         <input id="rec-correo" v-model="correo" type="email" class="control" autocomplete="email" placeholder="usuario@correo.com" />
         <p v-if="error" class="form-error mt-4" role="alert">{{ error }}</p>
         <button type="submit" class="mt-6 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary-dark" :disabled="enviando">
-          {{ enviando ? 'Enviando…' : 'Enviar contraseña temporal' }}
+          {{ enviando ? 'Enviando…' : 'Enviar contraseña' }}
         </button>
       </div>
       <p class="mt-4 text-center text-sm">

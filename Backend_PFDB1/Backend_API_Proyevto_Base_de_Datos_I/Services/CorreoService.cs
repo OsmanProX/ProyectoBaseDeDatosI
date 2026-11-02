@@ -50,7 +50,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
                            <b>Usuario:</b> {WebUtility.HtmlEncode(usuario)}<br>
                            {(contrasenaTemporal is null
                                ? "<b>Contraseña:</b> la que usted eligió al registrarse."
-                               : $"<b>Contraseña temporal:</b> <code style=\"font-size:15px\">{WebUtility.HtmlEncode(contrasenaTemporal)}</code>")}</p>
+                               : $"<b>Contraseña:</b> <code style=\"font-size:15px\">{WebUtility.HtmlEncode(contrasenaTemporal)}</code>")}</p>
                         <p>Adjuntamos su carta de bienvenida en PDF.</p>
                         <p style="color:#666;font-size:12px">No comparta su contraseña. El personal de TechCare nunca se la pedirá.</p>
                       </div>
@@ -87,7 +87,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
                         <p>Hola, <b>{WebUtility.HtmlEncode(nombre)}</b>.</p>
                         <p>Recibimos una solicitud para recuperar su contraseña.</p>
                         <p><b>Usuario:</b> {WebUtility.HtmlEncode(usuario)}<br>
-                           <b>Contraseña temporal:</b> <code style="font-size:15px">{WebUtility.HtmlEncode(contrasenaTemporal)}</code></p>
+                           <b>Contraseña:</b> <code style="font-size:15px">{WebUtility.HtmlEncode(contrasenaTemporal)}</code></p>
                         <p>Inicie sesión con ella y cámbiela en "Cambiar contraseña".</p>
                         <p style="color:#666;font-size:12px">Si usted no lo solicitó, avise a TechCare.</p>
                       </div>

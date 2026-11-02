@@ -58,7 +58,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
             foreach (var paso in new[]
             {
                 "1. Abra el sistema TechCare e inicie sesión con su correo.",
-                "2. Use la contraseña temporal que recibió en el cuerpo del correo de bienvenida.",
+                "2. Use la contraseña que recibió en el cuerpo del correo de bienvenida.",
                 "3. En \"Mis órdenes\" verá el estado de sus equipos, su factura y el saldo pendiente.",
             })
             {

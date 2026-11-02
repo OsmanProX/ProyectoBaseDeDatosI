@@ -66,7 +66,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         [HttpPost("recuperar")]
         public async Task<IActionResult> Recuperar([FromBody] RecuperarRequest request)
         {
-            const string generico = "Si el correo está registrado, le enviamos una contraseña temporal. Revise también la carpeta de spam.";
+            const string generico = "Si el correo está registrado, le enviamos una contraseña. Revise también la carpeta de spam.";
             try
             {
                 if (!ModelState.IsValid) return StatusCode(400, new { codigo = 400, mensaje = ErroresModelo() });

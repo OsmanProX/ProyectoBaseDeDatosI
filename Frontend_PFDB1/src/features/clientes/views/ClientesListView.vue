@@ -261,7 +261,7 @@ async function activar(c: Cliente) {
         </div>
 
         <label class="campo">
-          <span>Correo <InfoTip texto="Al registrar un cliente nuevo, el sistema le crea una cuenta (rol CLIENTE) con este correo y le envía por Gmail una contraseña temporal y un PDF de bienvenida. Al entrar por primera vez debe cambiar la contraseña. Con su cuenta solo ve 'Mis órdenes'." /></span>
+          <span>Correo <InfoTip texto="Al registrar un cliente nuevo, el sistema le crea una cuenta (rol CLIENTE) con este correo y le envía por Gmail una contraseña y un PDF de bienvenida. Al entrar por primera vez debe cambiar la contraseña. Con su cuenta solo ve 'Mis órdenes'." /></span>
           <input v-model="form.correo" type="email" maxlength="100" :aria-invalid="!!errores.correo" />
           <small v-if="editandoId === null" class="nota-cuenta">Se le creará su cuenta y recibirá un correo de bienvenida.</small>
           <small v-if="errores.correo">{{ errores.correo }}</small>

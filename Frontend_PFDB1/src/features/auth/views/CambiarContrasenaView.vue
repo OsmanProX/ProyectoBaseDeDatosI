@@ -17,7 +17,7 @@ const enviando = ref(false)
 
 async function enviar() {
   error.value = ''
-  if (!actual.value) return void (error.value = 'Escriba la contraseña temporal que recibió por correo.')
+  if (!actual.value) return void (error.value = 'Escriba la contraseña que recibió por correo.')
   if (nueva.value.length < 8) return void (error.value = 'La contraseña nueva debe tener al menos 8 caracteres.')
   if (nueva.value !== confirmar.value) return void (error.value = 'Las contraseñas nuevas no coinciden.')
   enviando.value = true
@@ -47,13 +47,13 @@ function salir() {
         </span>
         <h1 class="mt-4 text-2xl font-semibold">Cambie su contraseña</h1>
         <p class="mt-1.5 text-sm text-muted">
-          Hola, {{ auth.nombreCompleto }}. Ingresó con una contraseña temporal; por seguridad, elija una nueva para continuar.
+          Hola, {{ auth.nombreCompleto }}. Por seguridad, cambie la contraseña que recibió por correo para continuar.
         </p>
       </div>
 
       <div class="mt-7 space-y-4">
         <div>
-          <label for="cc-actual" class="label">Contraseña temporal (la del correo)</label>
+          <label for="cc-actual" class="label">Contraseña (la del correo)</label>
           <input id="cc-actual" v-model="actual" type="password" class="control" autocomplete="current-password" />
         </div>
         <div>
