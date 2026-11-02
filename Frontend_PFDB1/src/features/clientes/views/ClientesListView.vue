@@ -85,8 +85,10 @@ function validar(): boolean {
   else if (!/^(CF|[0-9]{1,13}-?[0-9Kk])$/i.test(form.nit.trim()))
     errores.nit = 'NIT inválido. Ejemplo: 1234567-8, o CF si es consumidor final.'
   if (!form.telefono.trim()) errores.telefono = 'Escriba un teléfono.'
-  if (form.correo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim()))
+  if (!form.correo.trim()) errores.correo = 'Escriba el correo.'
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim()))
     errores.correo = 'Correo inválido.'
+  if (!form.direccion.trim()) errores.direccion = 'Escriba la dirección.'
   return Object.keys(errores).length === 0
 }
 
@@ -258,13 +260,13 @@ async function activar(c: Cliente) {
         </div>
 
         <label class="campo">
-          <span>Correo (opcional)</span>
+          <span>Correo</span>
           <input v-model="form.correo" type="email" maxlength="100" :aria-invalid="!!errores.correo" />
           <small v-if="errores.correo">{{ errores.correo }}</small>
         </label>
 
         <label class="campo">
-          <span>Dirección (opcional)</span>
+          <span>Dirección</span>
           <input v-model="form.direccion" maxlength="200" :aria-invalid="!!errores.direccion" />
           <small v-if="errores.direccion">{{ errores.direccion }}</small>
         </label>
