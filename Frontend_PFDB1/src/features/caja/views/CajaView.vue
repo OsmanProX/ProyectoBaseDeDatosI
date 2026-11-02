@@ -154,7 +154,7 @@ function facturar() {
 
 function cobrar() {
   if (!factura.value) return
-  const monto = Math.round(Number(fPago.monto) * 100) / 100
+  const monto = Math.round(saldo.value * 100) / 100 // el monto es siempre el saldo pendiente
   if (!fPago.metodoPagoId) return void (errores.pago = 'Seleccione el método de pago.')
   if (!(monto > 0)) return void (errores.pago = 'El monto debe ser mayor que cero.')
   if (monto > saldo.value) return void (errores.pago = `El monto no puede pasar del saldo (${moneda(saldo.value)}).`)
@@ -331,7 +331,7 @@ function entregar() {
               </label>
               <label class="campo corto">
                 <span>Monto (Q)</span>
-                <input v-model.number="fPago.monto" type="number" min="0.01" step="0.01" />
+                <input :value="saldo.toFixed(2)" type="text" readonly tabindex="-1" aria-label="Monto a cobrar: saldo pendiente" />
               </label>
               <label v-if="pideReferencia" class="campo">
                 <span>Referencia</span>
