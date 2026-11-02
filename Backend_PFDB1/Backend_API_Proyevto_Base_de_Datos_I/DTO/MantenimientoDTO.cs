@@ -244,9 +244,10 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                     Correo = Texto(req.Correo),
                     Telefono = Texto(req.Telefono),
                     // VARCHAR igual que sp_LoginUsuario, para que el hash coincida
-                    Contrasena = id is null
-                        ? new DbString { Value = req.Contrasena, IsAnsi = true, Length = 255 }
-                        : null,
+                    // Siempre un DbString, aunque sea null al editar: un null sin tipo
+                    // hace que Dapper falle con "ICustomQueryParameter and cannot be null".
+                    // sp_Usuario_Guardar ignora la contraseña cuando se edita.
+                    Contrasena = new DbString { Value = id is null ? req.Contrasena : null, IsAnsi = true, Length = 255 },
                     Roles = string.Join(",", req.Roles.Distinct())
                 },
                 id is null ? "Usuario creado." : "Usuario actualizado.");
