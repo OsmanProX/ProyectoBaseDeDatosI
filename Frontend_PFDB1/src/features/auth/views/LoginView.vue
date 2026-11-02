@@ -21,7 +21,7 @@ async function enviar() {
   cargando.value = true
   try {
     await auth.login(correo.value, password.value)
-    router.push({ name: 'home' })
+    router.push({ name: auth.rol === 'CLIENTE' ? 'mis-ordenes' : 'home' })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudo iniciar sesión.'
   } finally {

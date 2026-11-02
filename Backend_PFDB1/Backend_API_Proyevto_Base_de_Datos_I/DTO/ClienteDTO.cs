@@ -160,6 +160,49 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             return respuesta;
         }
 
+        // Usa sp_Cliente_CrearAcceso (script 13): crea la cuenta con rol CLIENTE (51801-51806).
+        public async Task<ResponseDto> CrearAcceso(int usuarioId, string contrasenaTemporal)
+        {
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+                var cuenta = await connection.QueryFirstAsync<CuentaClienteModel>(
+                    "sp_Cliente_CrearAcceso",
+                    new
+                    {
+                        UsuarioId = usuarioId,
+                        ClienteId,
+                        // VARCHAR igual que sp_LoginUsuario, para que el hash coincida
+                        Contrasena = new DbString { Value = contrasenaTemporal, IsAnsi = true, Length = 255 },
+                    },
+                    commandType: System.Data.CommandType.StoredProcedure);
+                return new ResponseDto { codigo = 200, mensaje = "Cuenta creada.", data = cuenta };
+            }
+            catch (SqlException ex)
+            {
+                return new ResponseDto { codigo = 400, mensaje = ex.Message };
+            }
+        }
+
+        // Usa sp_Cliente_MisOrdenes (script 13): órdenes del cliente que inició sesión.
+        public async Task<ResponseDto> MisOrdenes(int usuarioId)
+        {
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+                var filas = await connection.QueryAsync<MiOrdenModel>(
+                    "sp_Cliente_MisOrdenes", new { UsuarioId = usuarioId },
+                    commandType: System.Data.CommandType.StoredProcedure);
+                return new ResponseDto { codigo = 200, mensaje = "OK", data = filas };
+            }
+            catch (SqlException ex)
+            {
+                return new ResponseDto { codigo = 400, mensaje = "MisOrdenes(): " + ex.Message };
+            }
+        }
+
         // Usa sp_Cliente_Actualizar (script 11): valida existencia, tipo y NIT único (51101-51105).
         public async Task<ResponseDto> Actualizar()
         {

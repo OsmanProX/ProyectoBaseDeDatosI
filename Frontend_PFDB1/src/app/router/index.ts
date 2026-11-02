@@ -95,6 +95,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Mantenimientos', requiresAuth: true, roles: ['ADMINISTRADOR', 'BODEGA'] },
       },
       {
+        path: 'mis-ordenes',
+        name: 'mis-ordenes',
+        component: () => import('@/features/portal/views/MisOrdenesView.vue'),
+        meta: { title: 'Mis órdenes', requiresAuth: true, roles: ['CLIENTE'] },
+      },
+      {
         path: 'acceso-denegado',
         name: 'acceso-denegado',
         component: () => import('@/app/views/AccesoDenegadoView.vue'),
@@ -125,7 +131,12 @@ router.beforeEach((to) => {
 
   // Ya autenticado y yendo al login → al inicio
   if (to.name === 'login' && auth.isAuthenticated) {
-    return { name: 'home' }
+    return { name: auth.rol === 'CLIENTE' ? 'mis-ordenes' : 'home' }
+  }
+
+  // El cliente solo usa su portal (Mis órdenes)
+  if (auth.isAuthenticated && auth.rol === 'CLIENTE' && to.name !== 'mis-ordenes' && to.name !== 'login') {
+    return { name: 'mis-ordenes' }
   }
 
   // Control de permisos por rol (tabla Permiso)

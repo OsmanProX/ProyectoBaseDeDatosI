@@ -9,6 +9,8 @@ export interface NavigationItem {
   roles?: string[]
   /** Sección del menú donde aparece. */
   grupo: string
+  /** Oculto para el rol CLIENTE (solo usa su portal). */
+  sinCliente?: boolean
 }
 
 // El menú va en el orden del flujo del negocio, de arriba hacia abajo:
@@ -16,7 +18,9 @@ export interface NavigationItem {
 // -> Factura, pago y entrega (Caja) -> Reportes. Al final, la administración del sistema.
 // MainLayout lo filtra según permisos (tabla Permiso) y rol del usuario.
 export const staticNavigation: NavigationItem[] = [
-  { id: -1, name: 'Inicio', path: '/', icon: 'LayoutDashboard', grupo: 'Inicio' },
+  { id: -1, name: 'Inicio', path: '/', icon: 'LayoutDashboard', grupo: 'Inicio', sinCliente: true },
+  // Portal del cliente (rol CLIENTE): solo ve sus órdenes
+  { id: -11, name: 'Mis órdenes', path: '/mis-ordenes', icon: 'ClipboardList', roles: ['CLIENTE'], grupo: 'Inicio' },
   // Proceso de servicio
   { id: -3, name: 'Clientes', path: '/clientes', icon: 'Contact', roles: ['ADMINISTRADOR', 'RECEPCION'], grupo: 'Proceso de servicio' },
   { id: -4, name: 'Equipos', path: '/equipos', icon: 'Laptop', roles: ['ADMINISTRADOR', 'RECEPCION'], grupo: 'Proceso de servicio' },

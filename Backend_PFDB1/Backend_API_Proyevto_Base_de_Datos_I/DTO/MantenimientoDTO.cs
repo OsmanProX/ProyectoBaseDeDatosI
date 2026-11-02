@@ -231,7 +231,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
         // ================= Usuarios =================
         public Task<ResponseDto> ConsultarRoles() =>
             Lista<RolModel>("ConsultarRoles",
-                "SELECT RolId, Nombre, Descripcion FROM Rol WHERE Activo = 1 ORDER BY RolId");
+                "SELECT RolId, Nombre, Descripcion FROM Rol WHERE Activo = 1 AND Nombre <> 'CLIENTE' ORDER BY RolId");
 
         public Task<ResponseDto> GuardarUsuario(int? id, UsuarioRequest req, int usuarioId) =>
             Procedimiento("GuardarUsuario", "sp_Usuario_Guardar",

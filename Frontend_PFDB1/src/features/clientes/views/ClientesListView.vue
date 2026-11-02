@@ -38,9 +38,9 @@ watch(buscar, () => { clearTimeout(timer); timer = setTimeout(cargar, 300) })
 watch(filtroEstado, cargar)
 onMounted(cargar)
 
-function mostrarAviso(texto: string) {
+function mostrarAviso(texto: string, ms = 3500) {
   aviso.value = texto
-  setTimeout(() => (aviso.value = ''), 3500)
+  setTimeout(() => (aviso.value = ''), ms)
 }
 
 // ---------- formulario (crear / editar) ----------
@@ -97,8 +97,8 @@ async function guardar() {
   guardando.value = true
   try {
     if (editandoId.value === null) {
-      await clientesApi.crear({ ...form })
-      mostrarAviso('Cliente registrado.')
+      const r = await clientesApi.crear({ ...form })
+      mostrarAviso(r?.acceso ? `Cliente registrado. ${r.acceso}` : 'Cliente registrado.', r?.acceso ? 10000 : 3500)
     } else {
       await clientesApi.editar(editandoId.value, { ...form })
       mostrarAviso('Cambios guardados.')

@@ -58,8 +58,9 @@ const apiReal = {
     // La API no filtra por estado; se filtra aquí
     return lista.filter((c) => !estado || c.estado === estado)
   },
+  // acceso: resultado de la cuenta del cliente y del correo de bienvenida
   crear(data: ClienteForm) {
-    return request<{ clienteId: number }>('/api/cliente/crear', {
+    return request<{ clienteId: number; acceso?: string }>('/api/cliente/crear', {
       method: 'POST',
       body: JSON.stringify(cuerpo(data)),
     })
@@ -100,7 +101,7 @@ const apiDemo = {
       .filter((c) => !b || c.nit.toLowerCase().includes(b) || c.nombreRazonSocial.toLowerCase().includes(b))
       .map((c) => ({ ...c }))
   },
-  async crear(data: ClienteForm): Promise<{ clienteId: number }> {
+  async crear(data: ClienteForm): Promise<{ clienteId: number; acceso?: string }> {
     await esperar()
     if (nitRepetido(data.nit)) throw new ApiError('Ya existe un cliente con ese NIT.', 500)
     const clienteId = Math.max(...demoClientes.map((c) => c.clienteId)) + 1
