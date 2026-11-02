@@ -28,6 +28,30 @@ const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/cambiar-contrasena',
+    component: () => import('@/shared/layouts/AuthLayout.vue'),
+    meta: { title: 'Cambiar contraseña' },
+    children: [
+      { path: '', name: 'cambiar-contrasena', component: () => import('@/features/auth/views/CambiarContrasenaView.vue'), meta: { title: 'Cambiar contraseña', requiresAuth: true } },
+    ],
+  },
+  {
+    path: '/registro',
+    component: () => import('@/shared/layouts/AuthLayout.vue'),
+    meta: { title: 'Crear cuenta' },
+    children: [
+      { path: '', name: 'registro', component: () => import('@/features/auth/views/RegistroView.vue'), meta: { title: 'Crear cuenta' } },
+    ],
+  },
+  {
+    path: '/recuperar',
+    component: () => import('@/shared/layouts/AuthLayout.vue'),
+    meta: { title: 'Recuperar contraseña' },
+    children: [
+      { path: '', name: 'recuperar', component: () => import('@/features/auth/views/RecuperarView.vue'), meta: { title: 'Recuperar contraseña' } },
+    ],
+  },
+  {
     path: '/',
     component: () => import('@/shared/layouts/MainLayout.vue'),
     meta: { title: 'Inicio' },
@@ -95,6 +119,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: 'Mantenimientos', requiresAuth: true, roles: ['ADMINISTRADOR', 'BODEGA'] },
       },
       {
+        path: 'mi-cuenta',
+        name: 'mi-cuenta',
+        component: () => import('@/features/auth/views/MiCuentaView.vue'),
+        meta: { title: 'Mi cuenta', requiresAuth: true },
+      },
+      {
         path: 'mis-ordenes',
         name: 'mis-ordenes',
         component: () => import('@/features/portal/views/MisOrdenesView.vue'),
@@ -134,8 +164,16 @@ router.beforeEach((to) => {
     return { name: auth.rol === 'CLIENTE' ? 'mis-ordenes' : 'home' }
   }
 
+  // Contraseña temporal: no puede usar el sistema hasta cambiarla
+  if (auth.isAuthenticated && auth.usuario?.debeCambiarContrasena) {
+    return to.name === 'cambiar-contrasena' ? true : { name: 'cambiar-contrasena' }
+  }
+  if (to.name === 'cambiar-contrasena' && auth.isAuthenticated && !auth.usuario?.debeCambiarContrasena) {
+    return { name: auth.rol === 'CLIENTE' ? 'mis-ordenes' : 'home' }
+  }
+
   // El cliente solo usa su portal (Mis órdenes)
-  if (auth.isAuthenticated && auth.rol === 'CLIENTE' && to.name !== 'mis-ordenes' && to.name !== 'login') {
+  if (auth.isAuthenticated && auth.rol === 'CLIENTE' && to.name !== 'mis-ordenes' && to.name !== 'mi-cuenta' && to.name !== 'login' && to.name !== 'registro' && to.name !== 'recuperar') {
     return { name: 'mis-ordenes' }
   }
 

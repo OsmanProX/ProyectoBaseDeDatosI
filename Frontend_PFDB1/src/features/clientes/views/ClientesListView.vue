@@ -7,6 +7,7 @@ import {
   clientesApi,
   type Cliente, type ClienteForm, type EstadoCliente,
 } from '../api/clientes'
+import InfoTip from '@/shared/components/InfoTip.vue'
 
 const auth = useAuthStore()
 // Mismos roles que la policy del backend (Program.cs)
@@ -260,8 +261,9 @@ async function activar(c: Cliente) {
         </div>
 
         <label class="campo">
-          <span>Correo</span>
+          <span>Correo <InfoTip texto="Al registrar un cliente nuevo, el sistema le crea una cuenta (rol CLIENTE) con este correo y le envía por Gmail una contraseña temporal y un PDF de bienvenida. Al entrar por primera vez debe cambiar la contraseña. Con su cuenta solo ve 'Mis órdenes'." /></span>
           <input v-model="form.correo" type="email" maxlength="100" :aria-invalid="!!errores.correo" />
+          <small v-if="editandoId === null" class="nota-cuenta">Se le creará su cuenta y recibirá un correo de bienvenida.</small>
           <small v-if="errores.correo">{{ errores.correo }}</small>
         </label>
 
@@ -371,4 +373,5 @@ tr.inactivo td { color: var(--c-muted); }
 .botones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
 
 @media (max-width: 600px) { .fila { grid-template-columns: 1fr; } .cabecera { flex-direction: column; align-items: stretch; } }
+.campo small.nota-cuenta { font-size: 12px; color: #2e8b57; }
 </style>

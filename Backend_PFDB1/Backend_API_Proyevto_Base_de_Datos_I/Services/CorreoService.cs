@@ -22,7 +22,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
             !string.IsNullOrWhiteSpace(_config["Correo:ClaveAplicacion"]);
 
         public async Task EnviarBienvenidaAsync(string destino, string nombre, string tipoCliente,
-                                                string usuario, string contrasenaTemporal)
+                                                string usuario, string? contrasenaTemporal)
         {
             if (!Configurado)
                 throw new InvalidOperationException("el correo del sistema no está configurado en user-secrets (Correo:Remitente y Correo:ClaveAplicacion).");
@@ -48,7 +48,9 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
                            en línea el estado de sus equipos.</p>
                         <p><b>Correo:</b> {WebUtility.HtmlEncode(destino)}<br>
                            <b>Usuario:</b> {WebUtility.HtmlEncode(usuario)}<br>
-                           <b>Contraseña temporal:</b> <code style="font-size:15px">{WebUtility.HtmlEncode(contrasenaTemporal)}</code></p>
+                           {(contrasenaTemporal is null
+                               ? "<b>Contraseña:</b> la que usted eligió al registrarse."
+                               : $"<b>Contraseña temporal:</b> <code style=\"font-size:15px\">{WebUtility.HtmlEncode(contrasenaTemporal)}</code>")}</p>
                         <p>Adjuntamos su carta de bienvenida en PDF.</p>
                         <p style="color:#666;font-size:12px">No comparta su contraseña. El personal de TechCare nunca se la pedirá.</p>
                       </div>
@@ -60,6 +62,44 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
                 new MemoryStream(PdfBienvenida.Generar(nombre, tipoCliente, destino, usuario, DateTime.Now)),
                 "Bienvenida_TechCare.pdf", "application/pdf"));
 
+            await Enviar(mensaje, remitente, clave);
+        }
+
+        // "¿Olvidó su contraseña?": envía la contraseña temporal nueva
+        public async Task EnviarRecuperacionAsync(string destino, string nombre, string usuario, string contrasenaTemporal)
+        {
+            if (!Configurado)
+                throw new InvalidOperationException("el correo del sistema no está configurado en user-secrets.");
+
+            var remitente = _config["Correo:Remitente"]!;
+            var clave = _config["Correo:ClaveAplicacion"]!.Replace(" ", "");
+            using var mensaje = new MailMessage
+            {
+                From = new MailAddress(remitente, "TechCare Solutions"),
+                Subject = "Recuperación de contraseña - TechCare Solutions",
+                IsBodyHtml = true,
+                Body = $"""
+                    <div style="font-family:Arial,sans-serif;color:#222b38;max-width:560px">
+                      <div style="background:#17375e;color:#fff;padding:16px 20px;border-bottom:4px solid #c8962e">
+                        <h2 style="margin:0">TechCare Solutions</h2>
+                      </div>
+                      <div style="padding:20px">
+                        <p>Hola, <b>{WebUtility.HtmlEncode(nombre)}</b>.</p>
+                        <p>Recibimos una solicitud para recuperar su contraseña.</p>
+                        <p><b>Usuario:</b> {WebUtility.HtmlEncode(usuario)}<br>
+                           <b>Contraseña temporal:</b> <code style="font-size:15px">{WebUtility.HtmlEncode(contrasenaTemporal)}</code></p>
+                        <p>Inicie sesión con ella y cámbiela en "Cambiar contraseña".</p>
+                        <p style="color:#666;font-size:12px">Si usted no lo solicitó, avise a TechCare.</p>
+                      </div>
+                    </div>
+                    """,
+            };
+            mensaje.To.Add(destino);
+            await Enviar(mensaje, remitente, clave);
+        }
+
+        private static async Task Enviar(MailMessage mensaje, string remitente, string clave)
+        {
             using var smtp = new SmtpClient("smtp.gmail.com", 587)
             {
                 EnableSsl = true,

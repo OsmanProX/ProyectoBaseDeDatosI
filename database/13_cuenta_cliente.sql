@@ -33,6 +33,11 @@ IF NOT EXISTS (SELECT 1 FROM sys.foreign_keys WHERE name = 'FK_Usuario_Cliente')
     ALTER TABLE dbo.Usuario ADD CONSTRAINT FK_Usuario_Cliente
         FOREIGN KEY (ClienteId) REFERENCES dbo.Cliente (ClienteId) ON DELETE NO ACTION ON UPDATE NO ACTION;
 GO
+-- 4. Contraseña temporal: obliga a cambiarla al iniciar sesión
+IF COL_LENGTH('dbo.Usuario', 'DebeCambiarContrasena') IS NULL
+    ALTER TABLE dbo.Usuario ADD DebeCambiarContrasena BIT NOT NULL
+        CONSTRAINT DF_Usuario_DebeCambiarContrasena DEFAULT (0);
+GO
 IF NOT EXISTS (SELECT 1 FROM sys.indexes WHERE name = 'UX_Usuario_ClienteId')
     CREATE UNIQUE NONCLUSTERED INDEX UX_Usuario_ClienteId ON dbo.Usuario (ClienteId) WHERE ClienteId IS NOT NULL;
 GO
@@ -96,10 +101,11 @@ BEGIN
             SET @NombreUsuario = CONCAT(@Base, @n);
         END;
 
-        INSERT INTO dbo.Usuario (NombreUsuario, ContrasenaHash, NombreCompleto, Correo, Telefono, ClienteId)
+        -- DebeCambiarContrasena = 1: la contraseña es temporal (llega por correo)
+        INSERT INTO dbo.Usuario (NombreUsuario, ContrasenaHash, NombreCompleto, Correo, Telefono, ClienteId, DebeCambiarContrasena)
         VALUES (@NombreUsuario,
                 UPPER(CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', @Contrasena), 2)),
-                LEFT(@Nombre, 100), @Correo, @Telefono, @ClienteId);
+                LEFT(@Nombre, 100), @Correo, @Telefono, @ClienteId, 1);
         SET @NuevoId = SCOPE_IDENTITY();
 
         INSERT INTO dbo.UsuarioRol (UsuarioId, RolId)

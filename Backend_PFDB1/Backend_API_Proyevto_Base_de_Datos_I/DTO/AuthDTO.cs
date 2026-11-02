@@ -50,7 +50,8 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                         usuario.NombreCompleto,
                         usuario.Correo,
                         usuario.Telefono,
-                        Roles = usuario.Roles ?? "SIN_ROL"
+                        Roles = usuario.Roles ?? "SIN_ROL",
+                        usuario.DebeCambiarContrasena
                     };
                 }
             }

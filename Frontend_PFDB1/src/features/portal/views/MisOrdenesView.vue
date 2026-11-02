@@ -3,7 +3,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { portalApi, type MiOrden } from '../api/portal'
-
 const auth = useAuthStore()
 const ordenes = ref<MiOrden[]>([])
 const cargando = ref(true)

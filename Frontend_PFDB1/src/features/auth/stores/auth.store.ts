@@ -52,5 +52,19 @@ export const useAuthStore = defineStore('auth', () => {
     sessionStorage.removeItem(PERMISOS_KEY)
   }
 
-  return { token, usuario, permisos, isAuthenticated, rol, nombreCompleto, tienePermiso, login, logout }
+  /** Después de cambiar la contraseña temporal: quita la marca de la sesión */
+  function contrasenaCambiada() {
+    if (!usuario.value) return
+    usuario.value = { ...usuario.value, debeCambiarContrasena: false }
+    sessionStorage.setItem(USER_KEY, JSON.stringify(usuario.value))
+  }
+
+  /** Después de editar "Mi cuenta": actualiza el nombre que se muestra arriba */
+  function actualizarNombre(nombre: string) {
+    if (!usuario.value) return
+    usuario.value = { ...usuario.value, nombreCompleto: nombre }
+    sessionStorage.setItem(USER_KEY, JSON.stringify(usuario.value))
+  }
+
+  return { token, usuario, permisos, isAuthenticated, rol, nombreCompleto, tienePermiso, login, logout, contrasenaCambiada, actualizarNombre }
 })
