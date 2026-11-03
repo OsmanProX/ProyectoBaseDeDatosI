@@ -2,7 +2,10 @@
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
+  ChevronDown,
   ChevronRight,
+  KeyRound,
+  UserPen,
   LogOut,
   Menu as MenuIcon,
   Moon,
@@ -30,13 +33,22 @@ const navItems = computed(() =>
   staticNavigation.filter(
     (item) =>
       (!item.permiso || auth.tienePermiso(item.permiso)) &&
-      (!item.roles || item.roles.includes(auth.rol)),
+      (!item.roles || item.roles.includes(auth.rol)) &&
+      !(item.sinCliente && auth.rol === 'CLIENTE'),
   ))
 // Se muestra el título de la sección solo en el primer elemento de cada grupo
 const conTitulo = (index: number) =>
   index > 0 && navItems.value[index]?.grupo !== navItems.value[index - 1]?.grupo
 
+// Menú del usuario (arriba a la derecha): Mi cuenta, cambiar contraseña y cerrar sesión
+const menuUsuario = ref(false)
+function irA(seccion?: string) {
+  menuUsuario.value = false
+  router.push({ name: 'mi-cuenta', query: seccion ? { seccion } : {} })
+}
+
 function cerrarSesion() {
+  menuUsuario.value = false
   auth.logout()
   router.push({ name: 'login' })
 }
@@ -140,12 +152,29 @@ function cerrarSesion() {
           </nav>
         </div>
         <div class="flex items-center gap-2 sm:gap-3">
-          <div class="hidden items-center gap-2.5 text-right sm:flex">
-            <div class="min-w-0">
-              <p class="truncate text-sm font-medium leading-tight">{{ auth.nombreCompleto || 'Usuario' }}</p>
-              <p class="truncate text-[11px] leading-tight text-muted">{{ auth.rol }}</p>
+          <div class="relative" @keydown.esc="menuUsuario = false">
+            <button type="button" class="flex items-center gap-2.5 rounded-lg px-2 py-1 text-right hover:bg-primary/10"
+              :aria-expanded="menuUsuario" aria-haspopup="menu" title="Mi cuenta" @click="menuUsuario = !menuUsuario">
+              <div class="hidden min-w-0 sm:block">
+                <p class="truncate text-sm font-medium leading-tight">{{ auth.nombreCompleto || 'Usuario' }}</p>
+                <p class="truncate text-[11px] leading-tight text-muted">{{ auth.rol }}</p>
+              </div>
+              <UserAvatar :name="auth.nombreCompleto || 'Usuario'" />
+              <ChevronDown class="h-4 w-4 text-muted" />
+            </button>
+            <div v-if="menuUsuario" class="fixed inset-0 z-40" aria-hidden="true" @click="menuUsuario = false" />
+            <div v-if="menuUsuario" role="menu"
+              class="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-border bg-surface py-1 text-left text-sm shadow-lg">
+              <button type="button" role="menuitem" class="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-primary/10" @click="irA()">
+                <UserPen class="h-4 w-4" /> Editar mis datos
+              </button>
+              <button type="button" role="menuitem" class="flex w-full items-center gap-2 px-4 py-2.5 hover:bg-primary/10" @click="irA('contrasena')">
+                <KeyRound class="h-4 w-4" /> Cambiar contraseña
+              </button>
+              <button type="button" role="menuitem" class="flex w-full items-center gap-2 border-t border-border px-4 py-2.5 text-red-500 hover:bg-primary/10" @click="cerrarSesion">
+                <LogOut class="h-4 w-4" /> Cerrar sesión
+              </button>
             </div>
-            <UserAvatar :name="auth.nombreCompleto || 'Usuario'" />
           </div>
           <button
             class="icon-button"

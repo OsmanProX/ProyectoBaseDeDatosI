@@ -60,7 +60,8 @@ const metodos = ref<MetodoPago[]>([])
 onMounted(async () => {
   await cargar()
   try {
-    metodos.value = await cajaApi.metodosPago()
+    // Solo EFECTIVO y TARJETA (TRANSFERENCIA no se usa en caja)
+    metodos.value = (await cajaApi.metodosPago()).filter((m) => m.nombre !== 'TRANSFERENCIA')
   } catch {
     /* si falla, el formulario de pago avisa al intentar cobrar */
   }
@@ -106,12 +107,52 @@ const ivaEstimado = computed(() => Math.round((orden.value?.totalSinIVA ?? 0) * 
 // ---------- formularios ----------
 const fFac = reactive({ nit: '', nombre: '' })
 const fPago = reactive({ metodoPagoId: 0, monto: 0, referencia: '' })
+// Datos de tarjeta: solo se validan aquí; a la base va marca + últimos 4 dígitos (nunca el número completo ni el CVV)
+const fTarjeta = reactive({ numero: '', nombre: '', vence: '', cvv: '' })
 const fEnt = reactive({ nombreRecibe: '', observaciones: '' })
 const errores = reactive<Record<string, string>>({})
 const enviando = ref('')
 
 const metodoElegido = computed(() => metodos.value.find((m) => m.metodoPagoId === fPago.metodoPagoId))
-const pideReferencia = computed(() => !!metodoElegido.value && metodoElegido.value.nombre !== 'EFECTIVO')
+const esTarjeta = computed(() => metodoElegido.value?.nombre === 'TARJETA')
+const soloDigitos = (v: string) => v.replace(/\D/g, '')
+const marcaTarjeta = computed(() => {
+  const n = soloDigitos(fTarjeta.numero)
+  if (/^4/.test(n)) return 'VISA'
+  if (/^(5[1-5]|2[2-7])/.test(n)) return 'MASTERCARD'
+  if (/^3[47]/.test(n)) return 'AMEX'
+  return ''
+})
+function luhnValido(n: string) {
+  let suma = 0
+  for (let i = 0; i < n.length; i++) {
+    let d = Number(n[n.length - 1 - i])
+    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9 }
+    suma += d
+  }
+  return n.length === 16 && suma % 10 === 0
+}
+function formatearNumero() {
+  fTarjeta.numero = soloDigitos(fTarjeta.numero).slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ')
+}
+function formatearVence() {
+  const d = soloDigitos(fTarjeta.vence).slice(0, 4)
+  fTarjeta.vence = d.length > 2 ? `${d.slice(0, 2)}/${d.slice(2)}` : d
+}
+function errorTarjeta(): string {
+  const n = soloDigitos(fTarjeta.numero)
+  if (n.length !== 16) return 'El número de tarjeta debe tener 16 dígitos.'
+  if (!luhnValido(n)) return 'Número de tarjeta inválido.'
+  if (!fTarjeta.nombre.trim()) return 'Escriba el nombre impreso en la tarjeta.'
+  if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' ]+$/.test(fTarjeta.nombre.trim())) return 'El nombre solo puede tener letras.'
+  const m = /^(\d{2})\/(\d{2})$/.exec(fTarjeta.vence)
+  if (!m || Number(m[1]) < 1 || Number(m[1]) > 12) return 'Fecha de expiración inválida (mm/aa).'
+  const hoy = new Date()
+  const venceFin = new Date(2000 + Number(m[2]), Number(m[1]), 0) // último día del mes
+  if (venceFin < new Date(hoy.getFullYear(), hoy.getMonth(), 1)) return 'La tarjeta está vencida.'
+  if (!/^\d{3,4}$/.test(fTarjeta.cvv)) return 'CVV inválido (3 o 4 dígitos).'
+  return ''
+}
 
 function prepararFormularios() {
   const o = orden.value
@@ -121,6 +162,7 @@ function prepararFormularios() {
     monto: factura.value?.saldoPendiente ?? 0,
     referencia: '',
   })
+  Object.assign(fTarjeta, { numero: '', nombre: '', vence: '', cvv: '' })
   Object.assign(fEnt, { nombreRecibe: '', observaciones: '' })
   Object.keys(errores).forEach((k) => delete errores[k])
 }
@@ -154,20 +196,26 @@ function facturar() {
 
 function cobrar() {
   if (!factura.value) return
-  const monto = Math.round(Number(fPago.monto) * 100) / 100
+  const monto = Math.round(saldo.value * 100) / 100 // el monto es siempre el saldo pendiente
   if (!fPago.metodoPagoId) return void (errores.pago = 'Seleccione el método de pago.')
   if (!(monto > 0)) return void (errores.pago = 'El monto debe ser mayor que cero.')
   if (monto > saldo.value) return void (errores.pago = `El monto no puede pasar del saldo (${moneda(saldo.value)}).`)
-  if (pideReferencia.value && !fPago.referencia.trim())
-    return void (errores.pago = 'Para tarjeta o transferencia escriba el número de referencia.')
-  if (fPago.referencia.trim() && !/^[A-Za-z0-9-]{4,50}$/.test(fPago.referencia.trim()))
-    return void (errores.pago = 'Referencia inválida: use de 4 a 50 caracteres, solo letras, números y guiones (ej. AUT-482915).')
+  let referencia: string | null = null
+  if (esTarjeta.value) {
+    const err = errorTarjeta()
+    if (err) return void (errores.pago = err)
+    // Referencia = marca + últimos 4 + sello único (la base no permite repetir referencia)
+    const n = soloDigitos(fTarjeta.numero)
+    referencia = `${marcaTarjeta.value || 'TARJETA'}-${n.slice(-4)}-${Date.now().toString(36).toUpperCase()}`
+    fTarjeta.numero = ''
+    fTarjeta.cvv = ''
+  }
   const f = factura.value
   ejecutar('pago', () => cajaApi.registrarPago({
     facturaId: f.facturaId,
     metodoPagoId: fPago.metodoPagoId,
     monto,
-    referencia: fPago.referencia.trim() || null,
+    referencia,
   }), `Pago de ${moneda(monto)} registrado en ${f.numeroFactura}.`)
 }
 
@@ -331,12 +379,34 @@ function entregar() {
               </label>
               <label class="campo corto">
                 <span>Monto (Q)</span>
-                <input v-model.number="fPago.monto" type="number" min="0.01" step="0.01" />
+                <input :value="saldo.toFixed(2)" type="text" readonly tabindex="-1" aria-label="Monto a cobrar: saldo pendiente" />
               </label>
-              <label v-if="pideReferencia" class="campo">
-                <span>Referencia</span>
-                <input v-model="fPago.referencia" maxlength="50" placeholder="Ej. AUT-482915" />
-              </label>
+              <div v-if="esTarjeta" class="tarjeta">
+                <p class="tarjeta-titulo">Datos de la tarjeta</p>
+                <div class="tarjeta-campos">
+                <label class="campo ancho">
+                  <span>Número de tarjeta <small>{{ marcaTarjeta ? `· ${marcaTarjeta}` : '' }}</small></span>
+                  <input v-model="fTarjeta.numero" inputmode="numeric" autocomplete="cc-number" maxlength="19"
+                    placeholder="4000 1234 5678 9010" @input="formatearNumero" />
+                </label>
+                <label class="campo ancho">
+                  <span>Nombre impreso en la tarjeta</span>
+                  <input v-model="fTarjeta.nombre" autocomplete="cc-name" maxlength="60" placeholder="Juan Pérez"
+                    @input="fTarjeta.nombre = fTarjeta.nombre.replace(/[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ' ]/g, '')" />
+                </label>
+                <label class="campo corto">
+                  <span>Expiración</span>
+                  <input v-model="fTarjeta.vence" inputmode="numeric" autocomplete="cc-exp" maxlength="5"
+                    placeholder="mm/aa" @input="formatearVence" />
+                </label>
+                <label class="campo corto">
+                  <span>CVV</span>
+                  <input v-model="fTarjeta.cvv" type="text" inputmode="numeric"
+                    @input="fTarjeta.cvv = soloDigitos(fTarjeta.cvv).slice(0, 4)" autocomplete="cc-csc" maxlength="4"
+                    placeholder="321" />
+                </label>
+                </div>
+              </div>
               <button type="submit" class="btn primario" :disabled="enviando === 'pago'">
                 {{ enviando === 'pago' ? 'Registrando…' : 'Registrar pago' }}
               </button>
@@ -413,6 +483,13 @@ h3 { margin: 0 0 8px; font-size: 17px; color: var(--c-title); display: flex; ali
 .campo { display: flex; flex-direction: column; gap: 4px; font-size: 14px; min-width: 160px; flex: 1; }
 .campo span { font-weight: 600; color: var(--c-title); }
 .campo.corto { flex: 0 0 140px; min-width: 0; }
+.tarjeta { flex: 0 0 100%; width: 100%; order: 10; border: 1px solid var(--c-input, #c9d2de); border-radius: 6px;
+  padding: 8px 12px 12px; margin-top: 4px; box-sizing: border-box; }
+.tarjeta-titulo { margin: 0 0 8px; font-weight: 600; }
+.tarjeta-campos { display: grid !important; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) 100px 90px; gap: 10px; align-items: start; }
+.tarjeta-campos .campo { flex: none; min-width: 0; width: auto; }
+.tarjeta-campos .campo span { white-space: nowrap; }
+@media (max-width: 760px) { .tarjeta-campos { grid-template-columns: 1fr 1fr; } }
 input, select { font: inherit; font-size: 15px; padding: 9px 10px; border: 1px solid var(--c-input); border-radius: 4px;
   background: var(--c-surface); color: var(--c-text); box-sizing: border-box; width: 100%; }
 input:focus-visible, select:focus-visible, .btn:focus-visible, .tarjeta:focus-visible, .pestanas button:focus-visible {

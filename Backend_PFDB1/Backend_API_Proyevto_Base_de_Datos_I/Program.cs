@@ -14,6 +14,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<DBContext>();
 builder.Services.AddScoped<JwtService>();
+builder.Services.AddScoped<Backend_API_Proyevto_Base_de_Datos_I.Services.CorreoService>();
 
 // Las claves no están en appsettings.json: se leen de los secretos de usuario (README, paso 2).
 var jwtKey = builder.Configuration["Jwt:Key"];

@@ -5,6 +5,8 @@ export interface UsuarioSesion {
   correo: string
   telefono?: string | null
   roles: string
+  /** true = entró con contraseña temporal: debe cambiarla antes de continuar */
+  debeCambiarContrasena?: boolean
 }
 
 export interface ResultadoLogin {

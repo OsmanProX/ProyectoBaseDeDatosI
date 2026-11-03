@@ -6,6 +6,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { usuariosApi, type Rol, type UsuarioFila } from '../api/usuarios'
+import InfoTip from '@/shared/components/InfoTip.vue'
 
 const auth = useAuthStore()
 
@@ -56,12 +57,17 @@ const visibles = computed(() => {
 // ---------- crear / editar ----------
 const dlgForm = ref<HTMLDialogElement | null>(null)
 const editandoId = ref<number | null>(null)
-const form = reactive({ nombreUsuario: '', nombreCompleto: '', correo: '', telefono: '', contrasena: '', confirmar: '', rolId: 0 })
+const form = reactive({ nombreUsuario: '', nombreCompleto: '', correo: '', telefono: '', contrasena: '', confirmar: '', rolIds: [] as number[] })
 const errorForm = ref('')
 const guardando = ref(false)
 
+// Roles que no se muestran como casilla (CLIENTE): se conservan al guardar
+const rolesOcultos = ref<number[]>([])
+
 function abrir(u?: UsuarioFila) {
   editandoId.value = u?.usuarioId ?? null
+  const ids = (u?.rolIds ?? '').split(',').filter(Boolean).map(Number)
+  rolesOcultos.value = ids.filter((id) => !roles.value.some((r) => r.rolId === id))
   Object.assign(form, {
     nombreUsuario: u?.nombreUsuario ?? '',
     nombreCompleto: u?.nombreCompleto ?? '',
@@ -69,7 +75,7 @@ function abrir(u?: UsuarioFila) {
     telefono: u?.telefono ?? '',
     contrasena: '',
     confirmar: '',
-    rolId: Number(u?.rolIds?.split(',')[0] ?? 0),
+    rolIds: ids.filter((id) => roles.value.some((r) => r.rolId === id)),
   })
   errorForm.value = ''
   dlgForm.value?.showModal()
@@ -85,7 +91,7 @@ function validar(): string {
   if (!form.nombreCompleto.trim()) return 'El nombre completo es obligatorio.'
   if (!RX_CORREO.test(form.correo.trim())) return 'Correo inválido.'
   if (form.telefono.trim() && !RX_TEL.test(form.telefono.trim())) return 'Teléfono inválido (8 a 15 dígitos).'
-  if (!form.rolId) return 'Seleccione el rol.'
+  if (!form.rolIds.length && !rolesOcultos.value.length) return 'Seleccione al menos un rol.'
   if (!editandoId.value) {
     if (form.contrasena.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
     if (form.contrasena !== form.confirmar) return 'Las contraseñas no coinciden.'
@@ -100,6 +106,7 @@ async function guardar() {
   try {
     await usuariosApi.guardar(editandoId.value, {
       ...form,
+      rolIds: [...form.rolIds, ...rolesOcultos.value],
       nombreUsuario: form.nombreUsuario.trim().toLowerCase(),
     })
     dlgForm.value?.close()
@@ -242,15 +249,22 @@ async function guardarClave() {
             <span>Usuario</span>
             <input v-model="form.nombreUsuario" maxlength="30" autocomplete="off" placeholder="tecnico5" />
           </label>
-          <label class="campo">
-            <span>Rol</span>
-            <select v-model.number="form.rolId">
-              <option :value="0" disabled>Seleccione…</option>
-              <option v-for="r in roles" :key="r.rolId" :value="r.rolId">{{ r.nombre }}</option>
-            </select>
-          </label>
+          <fieldset class="campo roles">
+            <legend>Roles (puede elegir varios)
+              <InfoTip derecha texto="Aquí solo aparecen los roles de empleados. El rol CLIENTE no se muestra porque es solo para clientes: se asigna automáticamente al crear la cuenta del cliente, ya sea desde Recepción o Administrador (pantalla Clientes → Nuevo cliente) o cuando el cliente se registra solo con Crear cuenta en el login. Al guardar aquí, ese rol se conserva." />
+            </legend>
+            <label v-for="r in roles" :key="r.rolId" class="rol-op">
+              <input v-model="form.rolIds" type="checkbox" :value="r.rolId" />
+              {{ r.nombre }}
+            </label>
+          </fieldset>
         </div>
-        <p v-if="form.rolId" class="nota">{{ roles.find((r) => r.rolId === form.rolId)?.descripcion }}</p>
+        <p v-if="rolesOcultos.length" class="nota">
+          Esta cuenta es de un <b>cliente</b> (rol CLIENTE). Ese rol se conserva al guardar; no marque roles de empleado.
+        </p>
+        <p v-if="form.rolIds.length" class="nota">
+          {{ roles.filter((r) => form.rolIds.includes(r.rolId)).map((r) => r.descripcion).filter(Boolean).join(' · ') }}
+        </p>
         <div class="fila">
           <label class="campo">
             <span>Correo (para iniciar sesión)</span>
@@ -361,6 +375,10 @@ tbody tr:nth-child(even) { background: var(--c-row); }
 .chip.ok { background: #dff3e4; color: #1d6b34; }
 .chip.inactivo { background: #ececec; color: #3c4450; }
 .chip.rol { background: #e6f0fb; color: #1d4f8a; }
+.roles { border: 1px solid var(--c-input); border-radius: 4px; padding: 6px 10px 8px; margin: 0; }
+.roles legend { font-size: 13px; padding: 0 4px; }
+.rol-op { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font-size: 14px; }
+.rol-op input { padding: 0; width: auto; }
 
 .btn { font: inherit; font-size: 15px; padding: 9px 16px; border-radius: 4px; border: 1px solid var(--c-input);
   background: var(--c-surface); color: var(--c-title); cursor: pointer; }
