@@ -11,14 +11,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
         {
             var c = new StringBuilder();
 
-            // Encabezado azul con línea dorada
-            c.Append("0.09 0.22 0.37 rg 0 722 612 70 re f\n");
-            c.Append("0.78 0.59 0.18 rg 0 718 612 4 re f\n");
-            // Logo (mismo ícono Wrench del login): cuadro redondeado + llave en trazo índigo
-            c.Append("0.16 0.20 0.36 rg 54 729 m 82 729 l 89.73 729 96 735.27 96 743 c 96 771 l 96 778.73 89.73 785 82 785 c 54 785 l 46.27 785 40 778.73 40 771 c 40 743 l 40 735.27 46.27 729 54 729 c h f\n");
-            c.Append("0.51 0.55 0.97 RG 2.33 w 1 J 1 j 71.15 763.65 m 70.94 763.43 70.82 763.13 70.82 762.83 c 70.82 762.53 70.94 762.23 71.15 762.02 c 73.02 760.15 l 73.23 759.94 73.53 759.82 73.83 759.82 c 74.13 759.82 74.43 759.94 74.65 760.15 c 78.27 763.77 l 78.65 764.15 79.28 764.03 79.42 763.52 c 79.89 761.82 79.68 759.95 78.86 758.39 c 78.04 756.83 76.60 755.61 74.94 755.04 c 73.27 754.47 71.39 754.56 69.78 755.28 c 60.56 746.06 l 60.10 745.60 59.45 745.33 58.81 745.33 c 58.16 745.33 57.52 745.60 57.06 746.06 c 56.60 746.52 56.33 747.16 56.33 747.81 c 56.33 748.45 56.60 749.10 57.06 749.56 c 66.29 758.78 l 65.56 760.39 65.47 762.27 66.04 763.94 c 66.61 765.60 67.83 767.04 69.39 767.86 c 70.95 768.68 72.82 768.89 74.52 768.42 c 75.03 768.28 75.15 767.65 74.77 767.27 c 71.15 763.65 l h S\n");
-            Texto(c, "F2", 24, 110, 757, "TechCare Solutions", true);
-            Texto(c, "F1", 11, 110, 738, "Servicio técnico de equipos de cómputo", true);
+            Encabezado(c);
 
             int y = 670;
             Texto(c, "F2", 18, 50, y, $"¡Bienvenido(a), {nombre}!");
@@ -82,7 +75,20 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
             return Armar(Encoding.Latin1.GetBytes(c.ToString()));
         }
 
-        private static void Texto(StringBuilder c, string fuente, int tam, int x, int y, string texto,
+        // Encabezado azul con logo (llave del login) y nombre; lo usa también PdfComprobante
+        internal static void Encabezado(StringBuilder c)
+        {
+            // Encabezado azul con línea dorada
+            c.Append("0.09 0.22 0.37 rg 0 722 612 70 re f\n");
+            c.Append("0.78 0.59 0.18 rg 0 718 612 4 re f\n");
+            // Logo (mismo ícono Wrench del login): cuadro redondeado + llave en trazo índigo
+            c.Append("0.16 0.20 0.36 rg 54 729 m 82 729 l 89.73 729 96 735.27 96 743 c 96 771 l 96 778.73 89.73 785 82 785 c 54 785 l 46.27 785 40 778.73 40 771 c 40 743 l 40 735.27 46.27 729 54 729 c h f\n");
+            c.Append("0.51 0.55 0.97 RG 2.33 w 1 J 1 j 71.15 763.65 m 70.94 763.43 70.82 763.13 70.82 762.83 c 70.82 762.53 70.94 762.23 71.15 762.02 c 73.02 760.15 l 73.23 759.94 73.53 759.82 73.83 759.82 c 74.13 759.82 74.43 759.94 74.65 760.15 c 78.27 763.77 l 78.65 764.15 79.28 764.03 79.42 763.52 c 79.89 761.82 79.68 759.95 78.86 758.39 c 78.04 756.83 76.60 755.61 74.94 755.04 c 73.27 754.47 71.39 754.56 69.78 755.28 c 60.56 746.06 l 60.10 745.60 59.45 745.33 58.81 745.33 c 58.16 745.33 57.52 745.60 57.06 746.06 c 56.60 746.52 56.33 747.16 56.33 747.81 c 56.33 748.45 56.60 749.10 57.06 749.56 c 66.29 758.78 l 65.56 760.39 65.47 762.27 66.04 763.94 c 66.61 765.60 67.83 767.04 69.39 767.86 c 70.95 768.68 72.82 768.89 74.52 768.42 c 75.03 768.28 75.15 767.65 74.77 767.27 c 71.15 763.65 l h S\n");
+            Texto(c, "F2", 24, 110, 757, "TechCare Solutions", true);
+            Texto(c, "F1", 11, 110, 738, "Servicio técnico de equipos de cómputo", true);
+        }
+
+        internal static void Texto(StringBuilder c, string fuente, int tam, int x, int y, string texto,
                                   bool blanco = false, bool gris = false)
         {
             var color = blanco ? "1 1 1" : gris ? "0.40 0.44 0.50" : "0.13 0.17 0.22";
@@ -90,10 +96,10 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
         }
 
         // En PDF los paréntesis y la barra invertida se escapan; lo que no exista en Latin1 se cambia por ?
-        private static string Escapar(string s) =>
+        internal static string Escapar(string s) =>
             s.Replace("\\", "\\\\").Replace("(", "\\(").Replace(")", "\\)");
 
-        private static IEnumerable<string> Partir(string texto, int max)
+        internal static IEnumerable<string> Partir(string texto, int max)
         {
             var linea = new StringBuilder();
             foreach (var palabra in texto.Split(' '))
@@ -110,7 +116,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
         }
 
         // Estructura mínima: catálogo, páginas, página, 2 fuentes y el contenido; luego la tabla xref.
-        private static byte[] Armar(byte[] contenido)
+        internal static byte[] Armar(byte[] contenido)
         {
             const string fuente = "<< /Type /Font /Subtype /Type1 /BaseFont /{0} /Encoding /WinAnsiEncoding >>";
             var objetos = new List<byte[]>

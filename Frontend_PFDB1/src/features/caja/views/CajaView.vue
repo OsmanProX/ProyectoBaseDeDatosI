@@ -75,6 +75,24 @@ function mostrarAviso(texto: string) {
 // ---------- detalle ----------
 const seleccionId = ref<number | null>(null)
 const detalle = ref<DetalleCaja | null>(null)
+
+// ---------- comprobante de entrega (PDF / correo) ----------
+const comprobante = ref<'' | 'pdf' | 'correo'>('')
+const errorComprobante = ref('')
+async function accionComprobante(tipo: 'pdf' | 'correo') {
+  const o = detalle.value?.orden
+  if (!o) return
+  comprobante.value = tipo
+  errorComprobante.value = ''
+  try {
+    if (tipo === 'pdf') await cajaApi.descargarComprobante(o.ordenId, o.numeroOrden)
+    else mostrarAviso((await cajaApi.enviarComprobante(o.ordenId)).mensaje)
+  } catch (e) {
+    errorComprobante.value = (e as Error).message
+  } finally {
+    comprobante.value = ''
+  }
+}
 const cargandoDetalle = ref(false)
 const errorDetalle = ref('')
 
@@ -423,6 +441,15 @@ function entregar() {
               por {{ detalle.entrega.entregadoPor }}.
               <span v-if="detalle.entrega.observaciones" class="detalle"><br />{{ detalle.entrega.observaciones }}</span>
             </p>
+            <div v-if="detalle.entrega && puedeCobrar" class="comprobante">
+              <button type="button" class="btn" :disabled="!!comprobante" @click="accionComprobante('pdf')">
+                {{ comprobante === 'pdf' ? 'Generando…' : 'Descargar PDF' }}
+              </button>
+              <button type="button" class="btn primario" :disabled="!!comprobante" @click="accionComprobante('correo')">
+                {{ comprobante === 'correo' ? 'Enviando…' : 'Enviar por correo al cliente' }}
+              </button>
+            </div>
+            <p v-if="errorComprobante" class="error" role="alert">{{ errorComprobante }}</p>
             <p v-else-if="saldo > 0" class="nota">El equipo se entrega cuando la factura no tenga saldo pendiente.</p>
             <form v-else-if="puedeEntregar" novalidate @submit.prevent="entregar">
               <div class="fila">
@@ -564,4 +591,5 @@ tbody tr:nth-child(even) { background: var(--c-row); }
   .campo.corto { flex: 1 1 100%; }
   table.resumen { min-width: 0; width: 100%; }
 }
+.comprobante { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
 </style>

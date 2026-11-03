@@ -5,6 +5,7 @@
 //        POST /api/caja/facturar, POST /api/caja/pagos, POST /api/caja/entregar
 // El usuario no se envía: la API lo toma del token del login.
 import { apiFetch } from '@/core/api/apiFetch'
+import { env } from '@/core/config/env'
 
 export interface OrdenCaja {
   ordenId: number
@@ -78,6 +79,27 @@ const post = <T>(path: string, body: unknown) =>
   apiFetch<T>(path, { method: 'POST', body: JSON.stringify(body) })
 
 export const cajaApi = {
+  /** Descarga el comprobante de entrega en PDF (Caja y Admin) */
+  async descargarComprobante(ordenId: number, numeroOrden: string) {
+    const token = sessionStorage.getItem('token')
+    const res = await fetch(`${env.VITE_API_BASE_URL}/api/caja/orden/${ordenId}/comprobante`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}))
+      throw new Error(body.mensaje ?? (res.status === 403 ? 'Su usuario no tiene permiso.' : 'No se pudo generar el PDF.'))
+    }
+    const url = URL.createObjectURL(await res.blob())
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `Comprobante_${numeroOrden}.pdf`
+    a.click()
+    URL.revokeObjectURL(url)
+  },
+  /** Envía el comprobante en PDF al correo del cliente */
+  enviarComprobante(ordenId: number) {
+    return apiFetch<{ mensaje: string }>(`/api/caja/orden/${ordenId}/comprobante/enviar`, { method: 'POST' })
+  },
   ordenes(entregadas = false) {
     return apiFetch<OrdenCaja[]>(`/api/caja/ordenes${entregadas ? '?entregadas=true' : ''}`)
   },

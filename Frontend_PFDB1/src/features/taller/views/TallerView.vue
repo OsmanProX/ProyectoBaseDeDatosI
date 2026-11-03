@@ -8,6 +8,8 @@ import {
   tallerApi, ESTADOS_TALLER,
   type OrdenTaller, type DetalleTaller, type RepuestoDisponible,
 } from '../api/taller'
+import { ordenesApi } from '@/features/ordenes/api/ordenes'
+import { useAuthStore } from '@/features/auth/stores/auth.store'
 
 const moneda = (n: number | null | undefined) =>
   (n ?? 0).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' })
@@ -128,6 +130,20 @@ const repuestoElegido = computed(() =>
   repuestos.value.find((r) => `${r.repuestoId}-${r.bodegaId}` === fRep.clave) ?? null)
 
 // Ejecuta una acción del taller, muestra el error donde corresponde y recarga
+// Cliente NO autorizó: la orden pasa a CANCELADO (sp_CambiarEstadoOrden, motivo obligatorio)
+const authTaller = useAuthStore()
+const motivoNoAutoriza = ref('')
+function clienteNoAutorizo() {
+  const o = orden.value
+  if (!o) return
+  const motivo = motivoNoAutoriza.value.trim()
+  if (!motivo) return void (errores.cancelar = 'Escriba el motivo (ej. el cliente no aceptó el costo).')
+  if (!window.confirm(`¿Cancelar la orden ${o.numeroOrden}? No se reparará ni se cobrará.`)) return
+  ejecutar('cancelar', () => ordenesApi.cambiarEstado(o.ordenId, 7, authTaller.usuario?.usuarioId ?? 0,
+    `Cliente no autorizó: ${motivo}`), `Orden ${o.numeroOrden} cancelada: el cliente no autorizó la reparación.`)
+  motivoNoAutoriza.value = ''
+}
+
 async function ejecutar(clave: string, accion: () => Promise<unknown>, ok: string) {
   enviando.value = clave
   delete errores[clave]
@@ -328,8 +344,8 @@ function finalizar() {
             <p v-if="rep" class="nota">El cliente autorizó. Reparación iniciada el {{ fechaHora(rep.fechaInicio) }}</p>
             <form v-else-if="paso === 'autorizacion'" novalidate @submit.prevent="iniciarReparacion">
               <p class="nota">
-                Cuando el cliente autorice el diagnóstico, inicie la reparación.
-                Si no autoriza, la orden se cancela desde «Órdenes».
+                Si el cliente autoriza el diagnóstico, inicie la reparación.
+                Si no autoriza, escriba el motivo y cancele la orden (no se repara ni se cobra).
               </p>
               <label class="campo">
                 <span>Plan de trabajo (opcional)</span>
@@ -338,9 +354,19 @@ function finalizar() {
               <p v-if="errores.inicio" class="error" role="alert">{{ errores.inicio }}</p>
               <div class="botones">
                 <button type="submit" class="btn primario" :disabled="enviando === 'inicio'">
-                  {{ enviando === 'inicio' ? 'Iniciando…' : 'Cliente autorizó: iniciar reparación' }}
+                  {{ enviando === 'inicio' ? 'Iniciando…' : '✔ Cliente autorizó: iniciar reparación' }}
                 </button>
               </div>
+              <div class="no-autoriza">
+                <label class="campo">
+                  <span>Motivo si el cliente no autoriza</span>
+                  <input v-model="motivoNoAutoriza" maxlength="250" placeholder="Ej. No aceptó el costo de Q800" />
+                </label>
+                <button type="button" class="btn peligro-btn" :disabled="enviando === 'cancelar'" @click="clienteNoAutorizo">
+                  {{ enviando === 'cancelar' ? 'Cancelando…' : '✖ Cliente no autorizó: cancelar orden' }}
+                </button>
+              </div>
+              <p v-if="errores.cancelar" class="error" role="alert">{{ errores.cancelar }}</p>
             </form>
             <p v-else class="nota">La orden no está en un estado que permita iniciar la reparación.</p>
           </article>
@@ -573,4 +599,8 @@ tbody tr:nth-child(even) { background: var(--c-row); }
   .campo { min-width: 0; flex: 1 1 100%; }
   .campo.corto { width: auto; }
 }
+.no-autoriza { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-top: 14px; padding-top: 12px;
+  border-top: 1px dashed var(--c-border, #d0d7e2); }
+.no-autoriza .campo { flex: 1; min-width: 220px; }
+.btn.peligro-btn { background: #b42318; border-color: #b42318; color: #fff; }
 </style>

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
+import InfoTip from '@/shared/components/InfoTip.vue'
 import {
   ordenesApi, ESTADOS, TRANSICIONES, PRIORIDADES,
   type OrdenResumen, type HistorialEstado, type OpcionCliente, type OpcionEquipo,
@@ -150,8 +151,17 @@ const observacion = ref('')
 const cambiando = ref(false)
 const errorCambio = ref('')
 
-const opcionesEstado = computed(() =>
-  actual.value ? (TRANSICIONES[actual.value.estadoId] ?? []).map((id) => ESTADOS[id - 1]!) : [])
+// Cambio MANUAL: solo casos especiales. Los demás pasos se hacen en su proceso (Taller y Caja):
+// diagnóstico → Taller, iniciar reparación → Taller, finalizar → Taller, entregar → Caja.
+// Aquí solo: iniciar diagnóstico (Técnico/Admin) y cancelar (Recepción/Técnico/Admin, con motivo).
+const opcionesEstado = computed(() => {
+  if (!actual.value) return []
+  const rol = auth.rol
+  const tecnicoOAdmin = rol.includes('TECNICO') || rol.includes('ADMINISTRADOR')
+  return (TRANSICIONES[actual.value.estadoId] ?? [])
+    .filter((id) => id === 7 || (id === 2 && tecnicoOAdmin))
+    .map((id) => ESTADOS[id - 1]!)
+})
 const cerrada = computed(() => !!actual.value && (actual.value.estadoId === 6 || actual.value.estadoId === 7))
 
 async function cargarHistorial() {
@@ -291,11 +301,14 @@ async function cambiarEstado() {
               {{ !nueva.clienteId ? 'Primero seleccione el cliente' : cargandoEquipos ? 'Cargando equipos…'
                 : equipos.length ? 'Seleccione un equipo…' : 'El cliente no tiene equipos registrados' }}
             </option>
-            <option v-for="e in equipos" :key="e.equipoId" :value="e.equipoId">
-              {{ e.tipoEquipo }} {{ e.marca }} {{ e.modelo }} — Serie {{ e.numeroSerie }}
+            <option v-for="e in equipos" :key="e.equipoId" :value="e.equipoId" :disabled="!!e.ordenAbierta">
+              {{ e.tipoEquipo }} {{ e.marca }} {{ e.modelo }} — Serie {{ e.numeroSerie }}{{ e.ordenAbierta ? ` (orden abierta ${e.ordenAbierta})` : '' }}
             </option>
           </select>
           <small v-if="errores.equipoId">{{ errores.equipoId }}</small>
+          <small v-else-if="equipos.some((e) => e.ordenAbierta)" style="color: var(--c-muted, #5a6472)">
+            Los equipos con una orden abierta no se pueden elegir: un equipo solo puede tener una orden activa.
+          </small>
         </label>
 
         <label class="campo">
@@ -380,13 +393,18 @@ async function cambiarEstado() {
           </table>
         </div>
 
-        <h3>Cambiar estado</h3>
+        <h3>Cambio manual de estado (casos especiales)
+          <InfoTip texto="Los estados avanzan solos desde Taller (diagnóstico, autorización, reparación, finalizar) y Caja (entrega). Aquí solo se usa para casos especiales, como iniciar el diagnóstico o cancelar la orden con su motivo. Cada cambio queda en el historial (R05)." />
+        </h3>
         <p v-if="!puedeCambiarEstado && !cerrada && actual.estadoId !== 5" class="nota">
           No tiene permiso para cambiar el estado de la orden (requiere CAMBIAR_ESTADO_ORDEN).
         </p>
         <p v-else-if="cerrada" class="nota">La orden está cerrada ({{ nombreEstado(actual.estado) }}) y ya no admite cambios.</p>
         <p v-else-if="actual.estadoId === 5" class="nota">
           La orden está lista. El paso a Entregado se hace desde Entrega, después de facturar y pagar.
+        </p>
+        <p v-else-if="!opcionesEstado.length" class="nota">
+          Esta orden avanza desde Taller (diagnóstico, reparación y finalizar). No hay cambios manuales disponibles para su rol.
         </p>
         <form v-else-if="puedeCambiarEstado && actual.estadoId !== 5" class="cambio" novalidate @submit.prevent="cambiarEstado">
           <p v-if="errorCambio" class="error" role="alert">{{ errorCambio }}</p>

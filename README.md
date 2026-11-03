@@ -33,6 +33,8 @@ El frontend **nunca** se conecta directo a SQL Server; todo pasa por la API.
 ```
 ├── BD/BD_Conetner_BD1/      docker-compose.yml del SQL Server local
 ├── database/                scripts SQL
+│   ├── Reglas_Obligatorias/   01–12 y 00_script_maestro: tablas, procesos y reglas R01–R16 del enunciado
+│   └── Reglas_Adicionales/    13–16: mejoras del grupo (cuentas de cliente, recuperar contraseña, correo único, técnico cancela)
 │   ├── 00_script_maestro.sql     TODO en un solo archivo (01 al 12 en orden), con índice de objetos
 │   ├── 01_tablas.sql             27 tablas con PK, FK, UNIQUE, DEFAULT y CHECK
 │   ├── 02_datos_iniciales.sql    catálogos y usuarios base
@@ -73,7 +75,7 @@ cd ProyectoBaseDeDatosI
 
 ## Paso 1 – Base de datos
 
-La base se crea completa con **un solo script**: `database/00_script_maestro.sql`.
+La base se crea completa con **un solo script**: `database/Reglas_Obligatorias/00_script_maestro.sql`.
 Ese archivo junta los scripts 01 al 12 en el orden correcto (incluye los datos de prueba del 05).
 
 > ⚠️ El script **borra las tablas si ya existen**. Sobre una base con datos, sacar un respaldo antes.
@@ -88,7 +90,7 @@ docker compose up -d
 ```
 
 1. Conectarse en SSMS a `localhost,1441` con el usuario `sa` y la contraseña del `.env`.
-2. Abrir `database/00_script_maestro.sql`.
+2. Abrir `database/Reglas_Obligatorias/00_script_maestro.sql`.
 3. Quitar el `--` de las 4 líneas que están después del encabezado (crean y seleccionan la base `TechCare`):
    ```sql
    IF DB_ID('TechCare') IS NULL CREATE DATABASE TechCare;
@@ -102,7 +104,7 @@ docker compose up -d
 
 1. Conectarse en SSMS al servidor de SmarterASP con el usuario de la base (los datos los tiene el grupo; **no están en el repositorio**).
 2. Seleccionar la base del proyecto en la lista de bases.
-3. Abrir `database/00_script_maestro.sql`, **dejar comentadas** las 4 líneas del `CREATE DATABASE` / `USE` y ejecutar todo.
+3. Abrir `database/Reglas_Obligatorias/00_script_maestro.sql`, **dejar comentadas** las 4 líneas del `CREATE DATABASE` / `USE` y ejecutar todo.
 
 ### Verificar
 

@@ -138,6 +138,22 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             return respuesta;
         }
 
+        // Datos para el comprobante en PDF (solo órdenes ya entregadas) + correo del cliente
+        public async Task<(OrdenCajaModel o, FacturaModel f, List<PagoModel> pagos, EntregaModel e, string? correo)?> DatosComprobante(int ordenId)
+        {
+            var r = await ConsultarDetalle(ordenId);
+            if (r.codigo != 200 || r.data is null) return null;
+            dynamic d = r.data;
+            if (d.orden is not OrdenCajaModel o || d.factura is not FacturaModel f || d.entrega is not EntregaModel e) return null;
+            var pagos = ((IEnumerable<PagoModel>?)d.pagos ?? Enumerable.Empty<PagoModel>()).ToList();
+
+            using var connection = _dbConnectionFactory.CreateConnection();
+            await connection.OpenAsync();
+            var correo = await connection.QueryFirstOrDefaultAsync<string?>(
+                "SELECT Correo FROM Cliente WHERE ClienteId = @Id", new { Id = o.ClienteId });
+            return (o, f, pagos, e, correo);
+        }
+
         public async Task<ResponseDto> ConsultarMetodosPago()
         {
             ResponseDto respuesta = new();
