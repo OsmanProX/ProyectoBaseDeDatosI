@@ -6,9 +6,9 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   inventarioApi,
   type Stock, type Bodega, type Proveedor, type RepuestoCatalogo,
-  type Compra, type DetalleCompra, type Movimiento, type EstadoCompra,
+  type Compra, type DetalleCompra, type Movimiento, type EstadoCompra, type CatalogoProveedor,
 } from '../api/inventario'
-import { mantenimientoApi, type Categoria } from '../../mantenimientos/api/mantenimientos'
+import { mantenimientoApi } from '../../mantenimientos/api/mantenimientos'
 import BuscadorSelect from '../components/BuscadorSelect.vue'
 import InfoTip from '@/shared/components/InfoTip.vue'
 
@@ -157,11 +157,29 @@ const nueva = reactive({
 // Opciones para los selectores con búsqueda
 const opcProveedores = computed(() =>
   proveedores.value.map((p) => ({ id: p.proveedorId, texto: `${p.nombre} — NIT ${p.nit}` })))
-// Repuestos ordenados por código (REP-0001, REP-0002, …)
+// Solo los repuestos que vende el proveedor elegido (su catálogo), ordenados por código
+const catalogoCompra = ref<CatalogoProveedor[]>([])
+const cargandoCatalogo = ref(false)
 const opcRepuestos = computed(() =>
-  [...catalogo.value]
-    .sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true }))
-    .map((r) => ({ id: r.repuestoId, texto: `${r.codigo} · ${r.nombre}` })))
+  catalogoCompra.value.map((r) => ({ id: r.repuestoId, texto: `${r.codigo} · ${r.nombre}` })))
+
+// Al cambiar de proveedor se carga su catálogo y se limpian las líneas
+async function cargarCatalogoCompra(proveedorId: number) {
+  catalogoCompra.value = []
+  if (!proveedorId) return
+  cargandoCatalogo.value = true
+  try {
+    catalogoCompra.value = await inventarioApi.catalogoProveedor(proveedorId)
+  } catch (e) {
+    errorForm.value = (e as Error).message
+  } finally {
+    cargandoCatalogo.value = false
+  }
+}
+watch(() => nueva.proveedorId, (id) => {
+  nueva.lineas = [{ repuestoId: 0, cantidad: 1, costoUnitario: 0 }]
+  cargarCatalogoCompra(id)
+})
 
 // En cada línea no aparecen los repuestos ya elegidos en otras líneas
 function opcionesLinea(i: number) {
@@ -180,102 +198,92 @@ function agregarLinea() {
   nueva.lineas.push({ repuestoId: 0, cantidad: 1, costoUnitario: 0 })
 }
 
-// Al elegir el repuesto se propone su precio de compra de referencia
+// Al elegir el repuesto se usa el precio de referencia de ese proveedor
 function elegirRepuesto(i: number) {
   const linea = nueva.lineas[i]
-  const r = catalogo.value.find((x) => x.repuestoId === linea?.repuestoId)
-  if (linea && r) linea.costoUnitario = r.precioCompraReferencia
+  const r = catalogoCompra.value.find((x) => x.repuestoId === linea?.repuestoId)
+  if (linea && r) linea.costoUnitario = r.precioReferencia
 }
 
-// ---------- alta rápida desde la compra (proveedor o repuesto nuevo) ----------
-const categorias = ref<Categoria[]>([])
-const nuevoProv = reactive({ abierto: false, nit: '', nombre: '', telefono: '', contacto: '', error: '', guardando: false })
-const nuevoRep = reactive({ abierto: false, categoriaId: 0, codigo: '', nombre: '', precioCompra: 0, precioVenta: 0, error: '', guardando: false })
+// ---------- Proveedores y catálogo (aparte de la compra) ----------
+// Nuevo proveedor con su catálogo, o editar el catálogo de uno existente (ProveedorRepuesto)
+const dlgProv = ref<HTMLDialogElement>()
+const provSel = ref(0) // 0 = proveedor nuevo
+const nuevoProv = reactive({ nit: '', nombre: '', telefono: '', contacto: '', correo: '', direccion: '', error: '', guardando: false })
+const catSel = reactive<Record<number, { marcado: boolean; precio: number }>>({})
+const buscarCat = ref('')
 
-// Filtros de escritura
 const soloNumeros = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max)
 const soloLetras = (v: string) => v.replace(/[^\p{L} ]/gu, '')
-// Nombre de repuesto: letras, números y signos comunes (ej. Pantalla LED 15.6" HD 30 pines)
-const nombreRepuesto = (v: string) => v.replace(/[^\p{L}\p{N} .,\-/"'()+#]/gu, '')
 const soloNit = (v: string) => v.replace(/[^\d-]/g, '').slice(0, 15)
-const RX_CODIGO = /^REP-\d{4}$/
-const codigoInfo = computed(() => {
-  const c = nuevoRep.codigo.trim()
-  if (!c) return { ok: false, texto: 'Formato: REP-0001' }
-  if (!RX_CODIGO.test(c)) return { ok: false, texto: 'Código no válido. Use el formato REP-0001 (REP, guion y 4 números).' }
-  if (catalogo.value.some((x) => x.codigo.toUpperCase() === c)) return { ok: false, texto: 'Ese código ya existe.' }
-  return { ok: true, texto: 'Código disponible.' }
-})
+const norm = (v: string) => v.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 
-function abrirNuevoProveedor() {
-  Object.assign(nuevoProv, { abierto: true, nit: '', nombre: '', telefono: '', contacto: '', error: '' })
+const repuestosOrdenados = computed(() =>
+  [...catalogo.value].sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true })))
+const repuestosFiltrados = computed(() => {
+  const t = norm(buscarCat.value.trim())
+  return repuestosOrdenados.value.filter((r) => !t || norm(`${r.codigo} ${r.nombre} ${r.categoria}`).includes(t))
+})
+const marcados = computed(() => Object.values(catSel).filter((x) => x.marcado).length)
+
+async function prepararCatalogo(proveedorId: number) {
+  Object.keys(catSel).forEach((k) => delete catSel[Number(k)])
+  for (const r of catalogo.value) catSel[r.repuestoId] = { marcado: false, precio: r.precioCompraReferencia }
+  if (!proveedorId) return
+  try {
+    for (const it of await inventarioApi.catalogoProveedor(proveedorId))
+      catSel[it.repuestoId] = { marcado: true, precio: it.precioReferencia }
+  } catch (e) {
+    nuevoProv.error = (e as Error).message
+  }
 }
 
-async function guardarNuevoProveedor() {
+function abrirProveedores(proveedorId = 0) {
+  Object.assign(nuevoProv, { nit: '', nombre: '', telefono: '', contacto: '', correo: '', direccion: '', error: '' })
+  buscarCat.value = ''
+  provSel.value = proveedorId
+  prepararCatalogo(proveedorId)
+  dlgProv.value?.showModal()
+}
+watch(provSel, (id) => { if (dlgProv.value?.open) prepararCatalogo(id) })
+
+async function guardarProveedorCatalogo() {
   nuevoProv.error = ''
-  const nit = nuevoProv.nit.trim().toUpperCase()
-  if (!/^\d{1,13}-?\d$/.test(nit)) return void (nuevoProv.error = 'NIT inválido. Ejemplo: 1234567-8.')
-  if (!nuevoProv.nombre.trim()) return void (nuevoProv.error = 'Escriba el nombre del proveedor.')
-  if (nuevoProv.telefono.length !== 8) return void (nuevoProv.error = 'El teléfono debe tener 8 números.')
-  if (nuevoProv.contacto && nuevoProv.contacto.length !== 8) return void (nuevoProv.error = 'El teléfono de contacto debe tener 8 números.')
+  let proveedorId = provSel.value
+  if (!proveedorId) {
+    const nit = nuevoProv.nit.trim().toUpperCase()
+    if (!/^\d{1,13}-?\d$/.test(nit)) return void (nuevoProv.error = 'NIT inválido. Ejemplo: 1234567-8.')
+    if (!nuevoProv.nombre.trim()) return void (nuevoProv.error = 'Escriba el nombre del proveedor.')
+    if (nuevoProv.telefono.length !== 8) return void (nuevoProv.error = 'El teléfono debe tener 8 números.')
+    if (nuevoProv.contacto && nuevoProv.contacto.length !== 8) return void (nuevoProv.error = 'El teléfono de contacto debe tener 8 números.')
+    if (nuevoProv.correo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevoProv.correo.trim()))
+      return void (nuevoProv.error = 'Correo inválido.')
+  }
+  if (!marcados.value) return void (nuevoProv.error = 'Marque al menos un repuesto que vende el proveedor.')
+  if (Object.values(catSel).some((x) => x.marcado && !(Number(x.precio) >= 0)))
+    return void (nuevoProv.error = 'Los precios no pueden ser negativos.')
   nuevoProv.guardando = true
   try {
-    await mantenimientoApi.guardarProveedor(null, {
-      nit, nombre: nuevoProv.nombre.trim(), contacto: nuevoProv.contacto.trim(),
-      telefono: nuevoProv.telefono.trim(), correo: '', direccion: '',
-    })
-    proveedores.value = await inventarioApi.proveedores()
-    const p = proveedores.value.find((x) => x.nit.toUpperCase() === nit)
-    if (p) nueva.proveedorId = p.proveedorId
-    nuevoProv.abierto = false
-    mostrarAviso('Proveedor creado y seleccionado.')
+    if (!proveedorId) {
+      const nit = nuevoProv.nit.trim().toUpperCase()
+      await mantenimientoApi.guardarProveedor(null, {
+        nit, nombre: nuevoProv.nombre.trim(), contacto: nuevoProv.contacto.trim(),
+        telefono: nuevoProv.telefono.trim(), correo: nuevoProv.correo.trim(), direccion: nuevoProv.direccion.trim(),
+      })
+      proveedores.value = await inventarioApi.proveedores()
+      proveedorId = proveedores.value.find((x) => x.nit.toUpperCase() === nit)?.proveedorId ?? 0
+      if (!proveedorId) throw new Error('No se encontró el proveedor recién creado.')
+    }
+    await inventarioApi.guardarCatalogo(proveedorId, Object.entries(catSel)
+      .filter(([, v]) => v.marcado)
+      .map(([id, v]) => ({ repuestoId: Number(id), precioReferencia: Number(v.precio) })))
+    dlgProv.value?.close()
+    mostrarAviso(provSel.value ? 'Catálogo del proveedor actualizado.' : 'Proveedor y catálogo registrados.')
+    if (nueva.proveedorId === proveedorId) cargarCatalogoCompra(proveedorId)
   } catch (e) {
     nuevoProv.error = (e as Error).message
   } finally {
     nuevoProv.guardando = false
-  }
-}
-
-async function abrirNuevoRepuesto() {
-  Object.assign(nuevoRep, { abierto: true, categoriaId: 0, codigo: '', nombre: '', precioCompra: 0, precioVenta: 0, error: '' })
-  if (!categorias.value.length) {
-    try {
-      categorias.value = (await mantenimientoApi.categorias()).filter((c) => c.activo)
-    } catch (e) {
-      nuevoRep.error = (e as Error).message
-    }
-  }
-}
-
-async function guardarNuevoRepuesto() {
-  nuevoRep.error = ''
-  const codigo = nuevoRep.codigo.trim().toUpperCase()
-  if (!nuevoRep.categoriaId) return void (nuevoRep.error = 'Seleccione la categoría.')
-  if (!codigoInfo.value.ok) return void (nuevoRep.error = codigoInfo.value.texto)
-  if (!nuevoRep.nombre.trim()) return void (nuevoRep.error = 'Escriba el nombre del repuesto.')
-  if (!(Number(nuevoRep.precioCompra) >= 0) || !(Number(nuevoRep.precioVenta) >= 0))
-    return void (nuevoRep.error = 'Los precios no pueden ser negativos.')
-  nuevoRep.guardando = true
-  try {
-    await mantenimientoApi.guardarRepuesto(null, {
-      categoriaId: nuevoRep.categoriaId, codigo, nombre: nuevoRep.nombre.trim(), descripcion: '',
-      precioCompraReferencia: Number(nuevoRep.precioCompra), precioVenta: Number(nuevoRep.precioVenta),
-      bodegaId: nueva.bodegaId, stockMinimo: 0,
-    })
-    catalogo.value = await inventarioApi.repuestos()
-    const r = catalogo.value.find((x) => x.codigo.toUpperCase() === codigo)
-    if (r) {
-      // Se usa la primera línea vacía o se agrega una nueva
-      let linea = nueva.lineas.find((l) => !l.repuestoId)
-      if (!linea) { agregarLinea(); linea = nueva.lineas[nueva.lineas.length - 1] }
-      if (linea) { linea.repuestoId = r.repuestoId; linea.costoUnitario = r.precioCompraReferencia }
-    }
-    nuevoRep.abierto = false
-    mostrarAviso('Repuesto creado y agregado a la compra.')
-  } catch (e) {
-    nuevoRep.error = (e as Error).message
-  } finally {
-    nuevoRep.guardando = false
   }
 }
 
@@ -372,7 +380,10 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
         <h1>Inventario y compras</h1>
         <p class="sub">Existencias por bodega, compras a proveedores y movimientos de repuestos.</p>
       </div>
-      <button class="btn primario" @click="pestana = 'compras'; abrirNueva()">Nueva compra</button>
+      <div class="acciones-cabecera">
+        <button class="btn" @click="pestana = 'compras'; abrirProveedores()">Proveedores y catálogo</button>
+        <button class="btn primario" @click="pestana = 'compras'; abrirNueva()">Nueva compra</button>
+      </div>
     </header>
 
     <p v-if="aviso" class="aviso" role="status">{{ aviso }}</p>
@@ -567,6 +578,57 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
       </div>
     </section>
 
+    <!-- Proveedores y catálogo -->
+    <dialog ref="dlgProv" class="modal ancho">
+      <form novalidate @submit.prevent="guardarProveedorCatalogo">
+        <h2>Proveedores y catálogo</h2>
+        <p class="nota">Registre un proveedor nuevo con los repuestos que vende, o edite el catálogo de uno existente.
+          Los repuestos nuevos se crean primero en Mantenimientos → Repuestos.</p>
+
+        <label class="campo">
+          <span>Proveedor</span>
+          <select v-model.number="provSel">
+            <option :value="0">➕ Nuevo proveedor</option>
+            <option v-for="p in proveedores" :key="p.proveedorId" :value="p.proveedorId">{{ p.nombre }} — NIT {{ p.nit }}</option>
+          </select>
+        </label>
+
+        <div v-if="!provSel" class="mini">
+          <p class="mini-titulo">Datos del proveedor nuevo</p>
+          <div class="mini-campos">
+            <label class="campo"><span>NIT</span><input v-model="nuevoProv.nit" maxlength="15" inputmode="numeric" placeholder="1234567-8" @input="nuevoProv.nit = soloNit(nuevoProv.nit)" /></label>
+            <label class="campo"><span>Nombre</span><input v-model="nuevoProv.nombre" maxlength="150" @input="nuevoProv.nombre = soloLetras(nuevoProv.nombre)" /></label>
+            <label class="campo"><span>Teléfono</span><input v-model="nuevoProv.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" @input="nuevoProv.telefono = soloNumeros(nuevoProv.telefono, 8)" /></label>
+            <label class="campo"><span>Tel. contacto (opcional)</span><input v-model="nuevoProv.contacto" maxlength="8" inputmode="numeric" @input="nuevoProv.contacto = soloNumeros(nuevoProv.contacto, 8)" /></label>
+            <label class="campo"><span>Correo (opcional)</span><input v-model="nuevoProv.correo" type="email" maxlength="100" /></label>
+            <label class="campo"><span>Dirección (opcional)</span><input v-model="nuevoProv.direccion" maxlength="200" /></label>
+          </div>
+        </div>
+
+        <div class="mini">
+          <p class="mini-titulo">Catálogo: repuestos que vende ({{ marcados }} marcados)</p>
+          <input v-model="buscarCat" type="search" placeholder="Buscar por código, nombre o categoría…" />
+          <div class="cat-lista">
+            <label v-for="r in repuestosFiltrados" :key="r.repuestoId" class="cat-item">
+              <input v-if="catSel[r.repuestoId]" v-model="catSel[r.repuestoId]!.marcado" type="checkbox" />
+              <span class="cat-nombre">{{ r.codigo }} · {{ r.nombre }} <small>{{ r.categoria }}</small></span>
+              <span v-if="catSel[r.repuestoId]?.marcado" class="cat-precio">Q
+                <input v-model.number="catSel[r.repuestoId]!.precio" type="number" min="0" step="0.01" aria-label="Precio de referencia" />
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <p v-if="nuevoProv.error" class="error" role="alert">{{ nuevoProv.error }}</p>
+        <div class="botones">
+          <button type="button" class="btn" @click="dlgProv?.close()">Cancelar</button>
+          <button type="submit" class="btn primario" :disabled="nuevoProv.guardando">
+            {{ nuevoProv.guardando ? 'Guardando…' : provSel ? 'Guardar catálogo' : 'Registrar proveedor y catálogo' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- Nueva compra -->
     <dialog ref="dlgCompra" class="modal ancho">
       <form novalidate @submit.prevent="guardarCompra">
@@ -575,7 +637,9 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
 
         <div class="fila">
           <label class="campo">
-            <span>Proveedor <button type="button" class="btn enlace mini-enlace" @click.prevent="abrirNuevoProveedor">+ Nuevo</button></span>
+            <span>Proveedor
+              <InfoTip texto="Solo proveedores ya registrados. En los repuestos aparecen únicamente los que vende este proveedor (su catálogo). Si no lo vende, use otro proveedor o regístrelo en 'Proveedores y catálogo'." />
+            </span>
             <BuscadorSelect v-model="nueva.proveedorId" :opciones="opcProveedores" etiqueta="Proveedor"
               placeholder="Escriba nombre, NIT o seleccione…" />
           </label>
@@ -588,22 +652,14 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
           </label>
         </div>
 
-        <div v-if="nuevoProv.abierto" class="mini">
-          <p class="mini-titulo">Nuevo proveedor</p>
-          <div class="mini-campos">
-            <label class="campo"><span>NIT</span><input v-model="nuevoProv.nit" maxlength="15" inputmode="numeric" placeholder="1234567-8" @input="nuevoProv.nit = soloNit(nuevoProv.nit)" /></label>
-            <label class="campo"><span>Nombre</span><input v-model="nuevoProv.nombre" maxlength="150" @input="nuevoProv.nombre = soloLetras(nuevoProv.nombre)" /></label>
-            <label class="campo"><span>Teléfono</span><input v-model="nuevoProv.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" @input="nuevoProv.telefono = soloNumeros(nuevoProv.telefono, 8)" /></label>
-            <label class="campo"><span>Tel. contacto (opcional)</span><input v-model="nuevoProv.contacto" maxlength="8" inputmode="numeric" placeholder="55001000" @input="nuevoProv.contacto = soloNumeros(nuevoProv.contacto, 8)" /></label>
-          </div>
-          <p v-if="nuevoProv.error" class="error" role="alert">{{ nuevoProv.error }}</p>
-          <div class="mini-botones">
-            <button type="button" class="btn" @click="nuevoProv.abierto = false">Cancelar</button>
-            <button type="button" class="btn primario" :disabled="nuevoProv.guardando" @click="guardarNuevoProveedor">
-              {{ nuevoProv.guardando ? 'Guardando…' : 'Guardar proveedor' }}
-            </button>
-          </div>
-        </div>
+        <p v-if="nueva.proveedorId && !cargandoCatalogo && !catalogoCompra.length" class="nota aviso-cat">
+          Este proveedor no tiene repuestos en su catálogo.
+          <button type="button" class="btn enlace" @click="abrirProveedores(nueva.proveedorId)">Agregar a su catálogo</button>
+        </p>
+        <p v-else-if="nueva.proveedorId" class="nota">
+          {{ catalogoCompra.length }} repuesto(s) en el catálogo de este proveedor.
+          <button type="button" class="btn enlace mini-enlace" @click="abrirProveedores(nueva.proveedorId)">Editar catálogo</button>
+        </p>
 
         <div class="tabla-wrap">
           <table class="lineas">
@@ -622,41 +678,11 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
             </tbody>
             <tfoot>
               <tr>
-                <td colspan="3"><button type="button" class="btn enlace" @click="agregarLinea">+ Agregar repuesto</button>
-                  <button type="button" class="btn enlace mini-enlace" @click="abrirNuevoRepuesto">+ Nuevo repuesto</button></td>
+                <td colspan="3"><button type="button" class="btn enlace" @click="agregarLinea">+ Agregar repuesto</button></td>
                 <td class="der fuerte">{{ moneda(totalNueva) }}</td><td></td>
               </tr>
             </tfoot>
           </table>
-        </div>
-
-        <div v-if="nuevoRep.abierto" class="mini">
-          <p class="mini-titulo">Nuevo repuesto</p>
-          <div class="mini-campos">
-            <label class="campo">
-              <span>Categoría</span>
-              <select v-model.number="nuevoRep.categoriaId">
-                <option :value="0" disabled>Seleccione…</option>
-                <option v-for="c in categorias" :key="c.categoriaId" :value="c.categoriaId">{{ c.nombre }}</option>
-              </select>
-            </label>
-            <label class="campo">
-              <span>Código</span>
-              <input v-model="nuevoRep.codigo" maxlength="8" placeholder="REP-0001"
-                @input="nuevoRep.codigo = nuevoRep.codigo.toUpperCase().replace(/[^A-Z0-9-]/g, '')" />
-              <small :class="codigoInfo.ok ? 'ok' : 'mal'">{{ codigoInfo.texto }}</small>
-            </label>
-            <label class="campo"><span>Nombre</span><input v-model="nuevoRep.nombre" maxlength="100" @input="nuevoRep.nombre = nombreRepuesto(nuevoRep.nombre)" /></label>
-            <label class="campo"><span>Precio compra (Q)</span><input v-model.number="nuevoRep.precioCompra" type="number" min="0" step="0.01" /></label>
-            <label class="campo"><span>Precio venta (Q)</span><input v-model.number="nuevoRep.precioVenta" type="number" min="0" step="0.01" /></label>
-          </div>
-          <p v-if="nuevoRep.error" class="error" role="alert">{{ nuevoRep.error }}</p>
-          <div class="mini-botones">
-            <button type="button" class="btn" @click="nuevoRep.abierto = false">Cancelar</button>
-            <button type="button" class="btn primario" :disabled="nuevoRep.guardando" @click="guardarNuevoRepuesto">
-              {{ nuevoRep.guardando ? 'Guardando…' : 'Guardar repuesto' }}
-            </button>
-          </div>
         </div>
 
         <label class="campo">
@@ -812,4 +838,13 @@ table.interna th { background: var(--c-disabled); color: var(--c-title); }
   .campo { min-width: 0; flex: 1 1 100%; }
 }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.acciones-cabecera { display: flex; gap: 8px; flex-wrap: wrap; }
+.aviso-cat { color: #b45309; }
+.cat-lista { max-height: 260px; overflow-y: auto; border: 1px solid var(--c-input, #c9d2de); border-radius: 4px; }
+.cat-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--c-input, #e2e8f0); font-size: 14px; cursor: pointer; }
+.cat-item > input[type='checkbox'] { width: auto; }
+.cat-nombre { flex: 1; }
+.cat-nombre small { opacity: 0.7; margin-left: 6px; }
+.cat-precio { display: inline-flex; align-items: center; gap: 4px; }
+.cat-precio input { width: 100px; padding: 4px 6px; }
 </style>

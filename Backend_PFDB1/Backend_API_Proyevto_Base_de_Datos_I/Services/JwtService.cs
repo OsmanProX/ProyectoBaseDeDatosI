@@ -34,8 +34,12 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
                 new(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
                 new(ClaimTypes.Name, usuario.NombreCompleto),
                 new(ClaimTypes.Email, usuario.Correo ?? string.Empty),
-                new(ClaimTypes.Role, usuario.Rol)
             };
+            // Un claim por cada rol ("RECEPCION, CAJA" → RECEPCION y CAJA), para que las
+            // policies (RequireRole) reconozcan a los usuarios con varios roles
+            claims.AddRange((usuario.Rol ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(r => new Claim(ClaimTypes.Role, r)));
 
             var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
 

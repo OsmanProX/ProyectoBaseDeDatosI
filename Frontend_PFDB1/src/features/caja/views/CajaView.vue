@@ -7,8 +7,8 @@ import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { cajaApi, type OrdenCaja, type DetalleCaja, type MetodoPago } from '../api/caja'
 
 const auth = useAuthStore()
-const puedeCobrar = computed(() => ['ADMINISTRADOR', 'CAJA'].includes(auth.rol))
-const puedeEntregar = computed(() => ['ADMINISTRADOR', 'RECEPCION'].includes(auth.rol))
+const puedeCobrar = computed(() => auth.tieneRol('ADMINISTRADOR', 'CAJA'))
+const puedeEntregar = computed(() => auth.tieneRol('ADMINISTRADOR', 'RECEPCION'))
 
 const moneda = (n: number | null | undefined) =>
   (n ?? 0).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' })

@@ -69,12 +69,12 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         public Task<IActionResult> Roles() =>
             Ejecutar("Roles", (d, _) => d.ConsultarRoles());
 
-        // La sesión (JWT) maneja un rol por usuario, así que se pide exactamente uno.
-        // La tabla UsuarioRol y sp_Usuario_Guardar sí aceptan varios.
+        // Un usuario puede tener uno o varios roles (tabla UsuarioRol, N:M).
+        // El JWT lleva un claim por rol (JwtService), así que los accesos se suman.
         private static ResponseDto? ValidarRol(UsuarioRequest req) =>
-            req.Roles.Distinct().Count() == 1
+            req.Roles.Distinct().Any()
                 ? null
-                : new ResponseDto { codigo = 400, mensaje = "Seleccione un rol para el usuario." };
+                : new ResponseDto { codigo = 400, mensaje = "Seleccione al menos un rol para el usuario." };
 
         // POST: api/usuario  { nombreUsuario, nombreCompleto, correo, telefono, contrasena, roles: [2] }
         [HttpPost]

@@ -3,7 +3,7 @@
 // activar/inactivar y restablecer contraseña. Las reglas las valida la base (script 12):
 // usuario y correo únicos, contraseña de 8+ caracteres (se guarda en hash) y
 // que siempre quede un ADMINISTRADOR activo.
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { usuariosApi, type Rol, type UsuarioFila } from '../api/usuarios'
 import InfoTip from '@/shared/components/InfoTip.vue'
@@ -60,6 +60,17 @@ const editandoId = ref<number | null>(null)
 const form = reactive({ nombreUsuario: '', nombreCompleto: '', correo: '', telefono: '', contrasena: '', confirmar: '', rolIds: [] as number[] })
 const errorForm = ref('')
 const guardando = ref(false)
+
+// ADMINISTRADOR ya tiene todos los permisos: si se marca, los demás roles no hacen falta.
+// En su propia cuenta, el administrador no puede quitarse ese rol (perdería el acceso).
+const rolAdminId = computed(() => roles.value.find((r) => r.nombre === 'ADMINISTRADOR')?.rolId ?? -1)
+const esMiCuenta = computed(() => editandoId.value !== null && editandoId.value === (auth.usuario?.usuarioId ?? 0))
+const esAdminMarcado = computed(() => form.rolIds.includes(rolAdminId.value))
+function rolBloqueado(rolId: number) {
+  if (rolId === rolAdminId.value) return esMiCuenta.value && esAdminMarcado.value
+  return esAdminMarcado.value
+}
+watch(esAdminMarcado, (admin) => { if (admin) form.rolIds = [rolAdminId.value] })
 
 // Roles que no se muestran como casilla (CLIENTE): se conservan al guardar
 const rolesOcultos = ref<number[]>([])
@@ -254,11 +265,13 @@ async function guardarClave() {
               <InfoTip derecha texto="Aquí solo aparecen los roles de empleados. El rol CLIENTE no se muestra porque es solo para clientes: se asigna automáticamente al crear la cuenta del cliente, ya sea desde Recepción o Administrador (pantalla Clientes → Nuevo cliente) o cuando el cliente se registra solo con Crear cuenta en el login. Al guardar aquí, ese rol se conserva." />
             </legend>
             <label v-for="r in roles" :key="r.rolId" class="rol-op">
-              <input v-model="form.rolIds" type="checkbox" :value="r.rolId" />
+              <input v-model="form.rolIds" type="checkbox" :value="r.rolId" :disabled="rolBloqueado(r.rolId)" />
               {{ r.nombre }}
             </label>
           </fieldset>
         </div>
+        <p v-if="esMiCuenta && esAdminMarcado" class="nota">Es su propia cuenta: no puede quitarse el rol ADMINISTRADOR.</p>
+        <p v-else-if="esAdminMarcado" class="nota">ADMINISTRADOR ya tiene acceso a todo; no hace falta marcar otros roles.</p>
         <p v-if="rolesOcultos.length" class="nota">
           Esta cuenta es de un <b>cliente</b> (rol CLIENTE). Ese rol se conserva al guardar; no marque roles de empleado.
         </p>
