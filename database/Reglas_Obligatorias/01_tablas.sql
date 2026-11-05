@@ -43,6 +43,9 @@ DROP TABLE IF EXISTS dbo.OrdenServicio;
 DROP TABLE IF EXISTS dbo.EstadoOrden;
 DROP TABLE IF EXISTS dbo.Equipo;
 DROP TABLE IF EXISTS dbo.TipoEquipo;
+-- La FK Usuario → Cliente (script 13) impide borrar Cliente antes que Usuario: se quita primero
+IF OBJECT_ID('dbo.FK_Usuario_Cliente', 'F') IS NOT NULL
+    ALTER TABLE dbo.Usuario DROP CONSTRAINT FK_Usuario_Cliente;
 DROP TABLE IF EXISTS dbo.Cliente;
 DROP TABLE IF EXISTS dbo.UsuarioRol;
 DROP TABLE IF EXISTS dbo.Usuario;

@@ -153,7 +153,8 @@ BEGIN
     UPDATE dbo.Usuario
     SET ContrasenaHash = UPPER(CONVERT(VARCHAR(64), HASHBYTES('SHA2_256', @Contrasena), 2)),
         DebeCambiarContrasena = 1   -- es temporal: se obliga a cambiarla al entrar
-    OUTPUT inserted.UsuarioId, inserted.NombreUsuario, inserted.Correo, inserted.NombreCompleto
+    OUTPUT inserted.UsuarioId, inserted.NombreUsuario, inserted.Correo, inserted.NombreCompleto,
+           deleted.ContrasenaHash AS HashAnterior, deleted.DebeCambiarContrasena AS DebeCambiarAnterior
     WHERE Correo = LOWER(LTRIM(RTRIM(@Correo))) AND Activo = 1;
 END;
 GO

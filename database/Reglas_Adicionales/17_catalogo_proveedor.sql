@@ -48,6 +48,10 @@ BEGIN
         IF ISJSON(ISNULL(@Catalogo, '[]')) = 0
             THROW 51883, 'Catálogo inválido.', 1;
 
+        IF EXISTS (SELECT j.repuestoId FROM OPENJSON(ISNULL(@Catalogo, '[]')) WITH (repuestoId INT) j
+                   WHERE j.repuestoId IS NOT NULL GROUP BY j.repuestoId HAVING COUNT(*) > 1)
+            THROW 51886, 'Un repuesto aparece repetido en el catálogo.', 1;
+
         INSERT INTO @Items (RepuestoId, PrecioReferencia, CodigoProveedor)
         SELECT DISTINCT j.repuestoId, j.precioReferencia, NULLIF(LTRIM(RTRIM(j.codigoProveedor)), '')
         FROM OPENJSON(ISNULL(@Catalogo, '[]'))
@@ -60,7 +64,9 @@ BEGIN
 
         BEGIN TRANSACTION;
 
+        -- Solo se quitan repuestos ACTIVOS (los inactivos no se muestran y se conservan en el catálogo)
         DELETE pr FROM dbo.ProveedorRepuesto pr
+        JOIN dbo.Repuesto r ON r.RepuestoId = pr.RepuestoId AND r.Estado = 'ACTIVO'
         WHERE pr.ProveedorId = @ProveedorId
           AND NOT EXISTS (SELECT 1 FROM @Items i WHERE i.RepuestoId = pr.RepuestoId);
 
@@ -88,7 +94,7 @@ GO
 /* Regla del grupo: una compra solo incluye repuestos del catálogo de su proveedor */
 CREATE OR ALTER TRIGGER dbo.trg_DetalleCompra_CatalogoProveedor
 ON dbo.DetalleCompra
-AFTER INSERT
+AFTER INSERT, UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;

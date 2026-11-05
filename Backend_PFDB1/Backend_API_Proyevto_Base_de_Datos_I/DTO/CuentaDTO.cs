@@ -51,6 +51,16 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 commandType: System.Data.CommandType.StoredProcedure);
         }
 
+        // Si el correo de recuperación falla, se devuelve la contraseña anterior (la cuenta no queda inutilizable)
+        public async Task Restaurar(CuentaClienteModel cuenta)
+        {
+            using var connection = _dbConnectionFactory.CreateConnection();
+            await connection.OpenAsync();
+            await connection.ExecuteAsync(
+                "UPDATE dbo.Usuario SET ContrasenaHash = @Hash, DebeCambiarContrasena = @Debe WHERE UsuarioId = @Id",
+                new { Hash = cuenta.HashAnterior, Debe = cuenta.DebeCambiarAnterior, Id = cuenta.UsuarioId });
+        }
+
         public async Task<ResponseDto> MiCuenta(int usuarioId, MiCuentaRequest? cambios = null)
         {
             try

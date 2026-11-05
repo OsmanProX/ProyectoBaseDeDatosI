@@ -63,7 +63,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Services
             {
                 Texto(c, "F1", 9, 50, y, p.FechaPago.ToString("dd/MM/yyyy HH:mm"));
                 Texto(c, "F1", 9, 160, y, p.Metodo);
-                Texto(c, "F1", 9, 260, y, p.Referencia ?? "—");
+                Texto(c, "F1", 9, 260, y, p.Referencia ?? "-");
                 Texto(c, "F1", 9, 400, y, Q(p.Monto));
                 Texto(c, "F1", 9, 470, y, p.CobradoPor.Length > 22 ? p.CobradoPor[..22] : p.CobradoPor);
                 y -= 13;

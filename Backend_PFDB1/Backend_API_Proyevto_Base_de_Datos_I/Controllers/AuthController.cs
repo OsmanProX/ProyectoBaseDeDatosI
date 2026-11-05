@@ -78,7 +78,18 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
                 var temporal = CorreoService.GenerarContrasenaTemporal();
                 var cuenta = await dto.Recuperar(request.Correo!, temporal);
                 if (cuenta is not null)
-                    await _correo.EnviarRecuperacionAsync(cuenta.Correo, cuenta.NombreCompleto, cuenta.NombreUsuario, temporal);
+                {
+                    try
+                    {
+                        await _correo.EnviarRecuperacionAsync(cuenta.Correo, cuenta.NombreCompleto, cuenta.NombreUsuario, temporal);
+                    }
+                    catch
+                    {
+                        // Sin correo no se cambia la contraseña: se restaura la anterior
+                        if (cuenta.HashAnterior is not null) await dto.Restaurar(cuenta);
+                        return StatusCode(500, new { codigo = 500, mensaje = "No se pudo enviar el correo. Intente de nuevo más tarde." });
+                    }
+                }
 
                 return Ok(new { codigo = 200, mensaje = generico, data = new { mensaje = generico } });
             }
