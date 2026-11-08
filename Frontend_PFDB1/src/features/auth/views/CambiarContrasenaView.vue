@@ -19,6 +19,9 @@ async function enviar() {
   error.value = ''
   if (!actual.value) return void (error.value = 'Escriba la contraseña que recibió por correo.')
   if (nueva.value.length < 8) return void (error.value = 'La contraseña nueva debe tener al menos 8 caracteres.')
+  if (!/\p{L}/u.test(nueva.value) || !/\d/.test(nueva.value))
+    return void (error.value = 'La contraseña nueva debe tener al menos una letra y un número.')
+  if (nueva.value === actual.value) return void (error.value = 'La contraseña nueva debe ser distinta de la que recibió por correo.')
   if (nueva.value !== confirmar.value) return void (error.value = 'Las contraseñas nuevas no coinciden.')
   enviando.value = true
   try {
@@ -58,7 +61,7 @@ function salir() {
         </div>
         <div>
           <label for="cc-nueva" class="label">Contraseña nueva</label>
-          <input id="cc-nueva" v-model="nueva" type="password" class="control" autocomplete="new-password" placeholder="Mínimo 8 caracteres" />
+          <input id="cc-nueva" v-model="nueva" type="password" class="control" autocomplete="new-password" placeholder="Mínimo 8, con letras y números" />
         </div>
         <div>
           <label for="cc-conf" class="label">Confirmar contraseña nueva</label>

@@ -1,4 +1,5 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Backend_API_Proyevto_Base_de_Datos_I.BD;
 using Backend_API_Proyevto_Base_de_Datos_I.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -13,6 +14,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<DBContext>();
+// Intentos fallidos de login (en memoria, no usa la base)
+builder.Services.AddSingleton<Backend_API_Proyevto_Base_de_Datos_I.Services.IntentosLoginService>();
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddScoped<Backend_API_Proyevto_Base_de_Datos_I.Services.CorreoService>();
 
@@ -82,6 +85,23 @@ builder.Services.AddCors(options =>
               .AllowAnyHeader()
               .AllowAnyMethod()));
 
+// Límite de intentos para login, registro y recuperar contraseña (por dirección IP):
+// 10 intentos por minuto. Evita que alguien pruebe contraseñas o envíe correos sin parar.
+// Es solo de la API (en memoria): no toca la base de datos.
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("Acceso", http => RateLimitPartition.GetFixedWindowLimiter(
+        http.Connection.RemoteIpAddress?.ToString() ?? "sin-ip",
+        _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+    options.OnRejected = async (contexto, token) =>
+    {
+        contexto.HttpContext.Response.ContentType = "application/json";
+        await contexto.HttpContext.Response.WriteAsync(
+            "{\"codigo\":429,\"mensaje\":\"Demasiados intentos. Espere un minuto y vuelva a intentar.\"}", token);
+    };
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -90,6 +110,8 @@ app.UseSwagger();
 app.UseSwaggerUI();
 
 app.UseCors("Frontend");
+
+app.UseRateLimiter();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -15,12 +15,14 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         private readonly DBContext _dbConnectionFactory;
         private readonly JwtService _jwtService;
         private readonly CorreoService _correo;
+        private readonly IntentosLoginService _intentos;
 
-        public AuthController(DBContext dbConnectionFactory, JwtService jwtService, CorreoService correo)
+        public AuthController(DBContext dbConnectionFactory, JwtService jwtService, CorreoService correo, IntentosLoginService intentos)
         {
             _dbConnectionFactory = dbConnectionFactory;
             _jwtService = jwtService;
             _correo = correo;
+            _intentos = intentos;
         }
 
         private string ErroresModelo() =>
@@ -29,6 +31,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         // POST: api/auth/registro  (público) — el cliente crea su cuenta (sp_Cliente_Registrarse)
         [AllowAnonymous]
         [HttpPost("registro")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("Acceso")]
         public async Task<IActionResult> Registro([FromBody] RegistroClienteRequest request)
         {
             try
@@ -64,6 +67,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         // Responde lo mismo exista o no el correo, para no revelar qué cuentas existen.
         [AllowAnonymous]
         [HttpPost("recuperar")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("Acceso")]
         public async Task<IActionResult> Recuperar([FromBody] RecuperarRequest request)
         {
             const string generico = "Si el correo está registrado, le enviamos una contraseña. Revise también la carpeta de spam.";
@@ -162,6 +166,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         // POST: api/auth/login
         // Valida el usuario contra la tabla Usuario y genera un JWT.
         [HttpPost("login")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("Acceso")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             ResponseDto respuesta = new ResponseDto();
@@ -176,10 +181,35 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
                     throw new Exception(string.Join(" | ", mensaje));
                 }
 
+                // Bloqueo temporal tras varios intentos fallidos (IntentosLoginService, en memoria)
+                var clave = IntentosLoginService.Clave(HttpContext.Connection.RemoteIpAddress?.ToString(), request.Correo);
+                var espera = _intentos.SegundosBloqueado(clave);
+                if (espera > 0)
+                    return StatusCode(429, new
+                    {
+                        codigo = 429,
+                        mensaje = $"Demasiados intentos fallidos. Espere {espera} segundos para volver a intentar.",
+                        segundos = espera
+                    });
+
                 AuthDTO authDTO = new AuthDTO();
                 authDTO.SetConexion(_dbConnectionFactory);
 
                 respuesta = await authDTO.Login(request);
+                if (respuesta.codigo == 401)
+                {
+                    var restantes = _intentos.RegistrarFallo(clave);
+                    var segundos = (int)IntentosLoginService.Bloqueo.TotalSeconds;
+                    return StatusCode(restantes == 0 ? 429 : 401, new
+                    {
+                        codigo = restantes == 0 ? 429 : 401,
+                        mensaje = restantes == 0
+                            ? $"Demasiados intentos fallidos. Espere {segundos} segundos para volver a intentar."
+                            : $"{respuesta.mensaje} Le quedan {restantes} de {IntentosLoginService.MaxIntentos} intentos.",
+                        intentosRestantes = restantes,
+                        segundos = restantes == 0 ? segundos : 0
+                    });
+                }
                 if (respuesta.codigo != 200)
                 {
                     return StatusCode(respuesta.codigo, new
@@ -188,6 +218,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
                         respuesta.mensaje
                     });
                 }
+                _intentos.Limpiar(clave);
 
                 dynamic data = (dynamic)respuesta.data!;
                 var usuario = new Usuario

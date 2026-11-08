@@ -105,6 +105,7 @@ function validar(): string {
   if (!form.rolIds.length && !rolesOcultos.value.length) return 'Seleccione al menos un rol.'
   if (!editandoId.value) {
     if (form.contrasena.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
+    if (!/\p{L}/u.test(form.contrasena) || !/\d/.test(form.contrasena)) return 'La contraseña debe tener al menos una letra y un número.'
     if (form.contrasena !== form.confirmar) return 'Las contraseñas no coinciden.'
   }
   return ''
@@ -175,6 +176,8 @@ function pedirClave(u: UsuarioFila) {
 async function guardarClave() {
   if (!elegido.value) return
   if (clave.nueva.length < 8) return void (errorClave.value = 'La contraseña debe tener al menos 8 caracteres.')
+  if (!/\p{L}/u.test(clave.nueva) || !/\d/.test(clave.nueva))
+    return void (errorClave.value = 'La contraseña debe tener al menos una letra y un número.')
   if (clave.nueva !== clave.confirmar) return void (errorClave.value = 'Las contraseñas no coinciden.')
   procesando.value = true
   errorClave.value = ''
@@ -298,7 +301,7 @@ async function guardarClave() {
             <input v-model="form.confirmar" type="password" autocomplete="new-password" />
           </label>
         </div>
-        <p v-if="!editandoId" class="nota">Mínimo 8 caracteres. Se guarda cifrada (hash), nunca en texto plano.</p>
+        <p v-if="!editandoId" class="nota">Mínimo 8 caracteres, con al menos una letra y un número. Se guarda cifrada (hash), nunca en texto plano.</p>
         <p v-if="errorForm" class="error" role="alert">{{ errorForm }}</p>
         <div class="botones">
           <button type="button" class="btn" @click="dlgForm?.close()">Cancelar</button>
@@ -338,7 +341,7 @@ async function guardarClave() {
             <input v-model="clave.confirmar" type="password" autocomplete="new-password" />
           </label>
         </div>
-        <p class="nota">Mínimo 8 caracteres.</p>
+        <p class="nota">Mínimo 8 caracteres, con al menos una letra y un número.</p>
         <p v-if="errorClave" class="error" role="alert">{{ errorClave }}</p>
         <div class="botones">
           <button type="button" class="btn" @click="dlgClave?.close()">Cancelar</button>

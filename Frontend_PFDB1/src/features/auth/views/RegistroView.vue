@@ -22,6 +22,7 @@ function validar(): string {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim())) return 'Correo inválido.'
   if (!form.direccion.trim()) return 'Escriba la dirección.'
   if (form.contrasena.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
+  if (!/\p{L}/u.test(form.contrasena) || !/\d/.test(form.contrasena)) return 'La contraseña debe tener al menos una letra y un número.'
   if (form.contrasena !== form.confirmar) return 'Las contraseñas no coinciden.'
   return ''
 }
@@ -93,7 +94,7 @@ async function enviar() {
             <div>
               <label for="r-pass" class="label">Contraseña</label>
               <div class="relative">
-                <input id="r-pass" v-model="form.contrasena" :type="verPass ? 'text' : 'password'" class="control pr-10" autocomplete="new-password" placeholder="Mínimo 8" />
+                <input id="r-pass" v-model="form.contrasena" :type="verPass ? 'text' : 'password'" class="control pr-10" autocomplete="new-password" placeholder="Mínimo 8, con letras y números" />
                 <button type="button" class="absolute inset-y-0 right-0 flex items-center px-3 text-muted hover:text-primary"
                   :aria-label="verPass ? 'Ocultar contraseña' : 'Ver contraseña'" @click="verPass = !verPass">
                   <EyeOff v-if="verPass" class="h-4 w-4" /><Eye v-else class="h-4 w-4" />

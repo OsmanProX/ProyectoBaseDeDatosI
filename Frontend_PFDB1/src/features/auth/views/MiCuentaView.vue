@@ -51,6 +51,9 @@ async function cambiarClave() {
   clave.ok = ''
   if (!clave.actual) return void (clave.error = 'Escriba su contraseña actual.')
   if (clave.nueva.length < 8) return void (clave.error = 'La contraseña nueva debe tener al menos 8 caracteres.')
+  if (!/\p{L}/u.test(clave.nueva) || !/\d/.test(clave.nueva))
+    return void (clave.error = 'La contraseña nueva debe tener al menos una letra y un número.')
+  if (clave.nueva === clave.actual) return void (clave.error = 'La contraseña nueva debe ser distinta de la actual.')
   if (clave.nueva !== clave.confirmar) return void (clave.error = 'Las contraseñas nuevas no coinciden.')
   clave.enviando = true
   try {
@@ -122,7 +125,7 @@ onMounted(async () => {
           <input id="mc-actual" v-model="clave.actual" :type="clave.ver ? 'text' : 'password'" autocomplete="current-password" />
         </label>
         <label>Contraseña nueva
-          <input v-model="clave.nueva" :type="clave.ver ? 'text' : 'password'" autocomplete="new-password" placeholder="Mínimo 8" />
+          <input v-model="clave.nueva" :type="clave.ver ? 'text' : 'password'" autocomplete="new-password" placeholder="Mínimo 8, con letras y números" />
         </label>
         <label>Confirmar
           <input v-model="clave.confirmar" :type="clave.ver ? 'text' : 'password'" autocomplete="new-password" />

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { Eye, EyeOff, Wrench } from 'lucide-vue-next'
 import { useAuthStore } from '../stores/auth.store'
@@ -13,7 +13,24 @@ const cargando = ref(false)
 const verPass = ref(false)
 const error = ref('')
 
+// Bloqueo por intentos fallidos: cuenta regresiva hasta poder intentar de nuevo
+const espera = ref(0)
+let reloj: ReturnType<typeof setInterval> | undefined
+function iniciarEspera(segundos: number) {
+  espera.value = segundos
+  clearInterval(reloj)
+  reloj = setInterval(() => {
+    espera.value--
+    if (espera.value <= 0) {
+      clearInterval(reloj)
+      error.value = ''
+    }
+  }, 1000)
+}
+onBeforeUnmount(() => clearInterval(reloj))
+
 async function enviar() {
+  if (espera.value > 0) return
   error.value = ''
   if (!correo.value || !password.value) {
     error.value = 'Ingrese su correo o usuario y su contraseña.'
@@ -25,6 +42,8 @@ async function enviar() {
     router.push({ name: auth.rol === 'CLIENTE' ? 'mis-ordenes' : 'home' })
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'No se pudo iniciar sesión.'
+    const segundos = (e as { segundos?: number }).segundos ?? 0
+    if (segundos > 0) iniciarEspera(segundos)
   } finally {
     cargando.value = false
   }
@@ -75,10 +94,13 @@ async function enviar() {
         </div>
       </div>
 
-      <p v-if="error" class="form-error mt-4" role="alert">{{ error }}</p>
+      <p v-if="espera > 0" class="form-error mt-4" role="alert">
+        Demasiados intentos fallidos. Puede volver a intentar en <b>{{ espera }}</b> segundo(s).
+      </p>
+      <p v-else-if="error" class="form-error mt-4" role="alert">{{ error }}</p>
 
-      <button type="submit" class="mt-6 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary-dark" :disabled="cargando">
-        {{ cargando ? 'Ingresando…' : 'Ingresar' }}
+      <button type="submit" class="mt-6 w-full rounded-lg bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary-dark disabled:cursor-not-allowed disabled:opacity-60" :disabled="cargando || espera > 0">
+        {{ cargando ? 'Ingresando…' : espera > 0 ? `Espere ${espera} s` : 'Ingresar' }}
       </button>
 
       <div class="mt-4 flex flex-col items-center gap-2 text-sm">
