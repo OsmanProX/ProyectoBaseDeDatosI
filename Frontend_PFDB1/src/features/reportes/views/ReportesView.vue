@@ -6,6 +6,9 @@ import {
   reportesApi, REPORTES, etiqueta, valor, esMoneda,
   type Fila, type Trazabilidad,
 } from '../api/reportes'
+import { ordenesApi, type OrdenResumen } from '@/features/ordenes/api/ordenes'
+import { cajaApi } from '@/features/caja/api/caja'
+import InfoTip from '@/shared/components/InfoTip.vue'
 
 const actual = ref(REPORTES[0]!)
 const filtros = reactive({ desde: '', hasta: '', buscar: '', bodegaId: 0, estado: '' })
@@ -19,15 +22,162 @@ const generado = ref(false)
 
 const columnas = computed(() => (filas.value[0] ? Object.keys(filas.value[0]) : []))
 
-// Totales de las columnas de dinero (útil en ingresos, repuestos, compras y saldos)
+// ---------- buscar dentro del resultado y ordenar columnas (en pantalla, sin volver a consultar) ----------
+const enTabla = ref('')
+const orden = ref<{ col: string; asc: boolean } | null>(null)
+const normalizar = (v: unknown) => String(v ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+
+const filasVista = computed(() => {
+  const t = normalizar(enTabla.value.trim())
+  let lista = t
+    ? filas.value.filter((f) => columnas.value.some((c) => normalizar(valor(c, f[c] ?? null)).includes(t)))
+    : [...filas.value]
+  const o = orden.value
+  if (o) {
+    lista = lista.sort((a, b) => {
+      const x = a[o.col] ?? null
+      const y = b[o.col] ?? null
+      if (x === y) return 0
+      if (x === null) return 1 // los vacíos siempre al final
+      if (y === null) return -1
+      const r = typeof x === 'number' && typeof y === 'number'
+        ? x - y
+        : String(x).localeCompare(String(y), 'es', { numeric: true })
+      return o.asc ? r : -r
+    })
+  }
+  return lista
+})
+
+function ordenarPor(col: string) {
+  const o = orden.value
+  orden.value = o?.col === col ? (o.asc ? { col, asc: false } : null) : { col, asc: true }
+}
+function flecha(col: string) {
+  const o = orden.value
+  if (!o || o.col !== col) return '↕'
+  return o.asc ? '▲' : '▼'
+}
+
+// Totales de las columnas de dinero (útil en ingresos, repuestos, compras y saldos); suman lo que se ve
 const totales = computed(() => {
   const t: Record<string, number> = {}
   for (const c of columnas.value) {
     if (!esMoneda(c) || ['precioVenta', 'precioCompraReferencia', 'precioVentaActual', 'costoActual', 'costoHistorico', 'ventaHistorica'].includes(c)) continue
-    t[c] = filas.value.reduce((s, f) => s + (typeof f[c] === 'number' ? (f[c] as number) : 0), 0)
+    t[c] = filasVista.value.reduce((s, f) => s + (typeof f[c] === 'number' ? (f[c] as number) : 0), 0)
   }
   return t
 })
+
+// ---------- tarjetas de resumen (arriba de la tabla) ----------
+const tarjetas = computed(() => {
+  const lista = [{ titulo: 'Registros', texto: filasVista.value.length.toLocaleString('es-GT') }]
+  if (hayTotales.value) {
+    for (const [c, v] of Object.entries(totales.value).slice(0, 3)) lista.push({ titulo: etiqueta(c), texto: valor(c, v) })
+  }
+  return lista
+})
+
+// ---------- gráfica de barras (agrupa lo que se ve en la tabla) ----------
+// Cada reporte dice por qué columna agrupar y, si aplica, qué columna de dinero/cantidad sumar.
+// Se usan nombres posibles: se toma el primero que exista en el resultado.
+const GRAFICAS: Record<number, { titulo: string; agrupar: string[]; sumar?: string[] }> = {
+  1: { titulo: 'Órdenes por estado', agrupar: ['estadoActual', 'estado', 'estadoOrden'] },
+  4: { titulo: 'Trabajos por técnico', agrupar: ['tecnico', 'tecnicoResponsable', 'nombreTecnico'] },
+  5: { titulo: 'Venta por repuesto (top 8)', agrupar: ['repuesto', 'nombreRepuesto'], sumar: ['ventaTotal', 'ventaHistorica'] },
+  6: { titulo: 'Valor del inventario por bodega', agrupar: ['bodega'], sumar: ['valorInventario'] },
+  7: { titulo: 'Repuestos bajo mínimo por bodega', agrupar: ['bodega'] },
+  8: { titulo: 'Compras por proveedor', agrupar: ['proveedor', 'nombreProveedor'], sumar: ['costoTotal', 'total', 'costoHistorico'] },
+  9: { titulo: 'Unidades por tipo de movimiento', agrupar: ['tipoMovimiento'], sumar: ['cantidad'] },
+  11: { titulo: 'Ingresos por mes', agrupar: ['mes'], sumar: ['total', 'cobrado', 'subtotal'] },
+}
+
+const grafica = computed(() => {
+  const def = GRAFICAS[actual.value.numero]
+  if (!def || filasVista.value.length < 2) return null
+  const cols = columnas.value
+  const g = def.agrupar.find((c) => cols.includes(c))
+  if (!g) return null
+  const s = def.sumar?.find((c) => cols.includes(c))
+  const grupos = new Map<string, number>()
+  for (const f of filasVista.value) {
+    // Ingresos por mes: la etiqueta lleva el año ("Oct 2026")
+    const nombre = g === 'mes' && cols.includes('anio')
+      ? `${valor('mes', f.mes ?? null)} ${f.anio ?? ''}`.trim()
+      : valor(g, f[g] ?? null)
+    const n = s ? (typeof f[s] === 'number' ? (f[s] as number) : 0) : 1
+    grupos.set(nombre, (grupos.get(nombre) ?? 0) + n)
+  }
+  let barras = [...grupos].map(([nombre, total]) => ({ nombre, total }))
+  if (g !== 'mes') barras = barras.sort((a, b) => b.total - a.total).slice(0, 8) // por mes se respeta el orden del tiempo
+  const max = Math.max(...barras.map((b) => b.total), 0)
+  if (max <= 0) return null
+  return {
+    titulo: def.titulo,
+    barras: barras.map((b) => ({
+      ...b,
+      pct: Math.max(2, Math.round((b.total / max) * 100)),
+      texto: s ? valor(s, b.total) : b.total.toLocaleString('es-GT'),
+    })),
+  }
+})
+
+// ---------- fechas rápidas ----------
+const fechaLocal = (d: Date) => d.toLocaleDateString('en-CA') // AAAA-MM-DD en hora de Guatemala
+function rango(tipo: 'mes' | 'mesAnterior' | 'dias30' | 'anio') {
+  const hoy = new Date()
+  const y = hoy.getFullYear()
+  const m = hoy.getMonth()
+  if (tipo === 'mes') Object.assign(filtros, { desde: fechaLocal(new Date(y, m, 1)), hasta: fechaLocal(hoy) })
+  else if (tipo === 'mesAnterior') Object.assign(filtros, { desde: fechaLocal(new Date(y, m - 1, 1)), hasta: fechaLocal(new Date(y, m, 0)) })
+  else if (tipo === 'dias30') Object.assign(filtros, { desde: fechaLocal(new Date(y, m, hoy.getDate() - 29)), hasta: fechaLocal(hoy) })
+  else Object.assign(filtros, { desde: fechaLocal(new Date(y, 0, 1)), hasta: fechaLocal(hoy) })
+  generar()
+}
+
+// ---------- reporte 12: elegir la orden de una lista y enviar el comprobante ----------
+const ordenesLista = ref<OrdenResumen[]>([])
+async function cargarOrdenes() {
+  if (ordenesLista.value.length) return
+  try {
+    ordenesLista.value = await ordenesApi.listar('', '')
+  } catch {
+    ordenesLista.value = [] // si falla, se escribe el número a mano
+  }
+}
+const recientes = computed(() => ordenesLista.value.slice(0, 8))
+function verOrden(numero: string) {
+  filtros.buscar = numero
+  generar()
+}
+
+const entregada = computed(() => !!traza.value?.resumen?.fechaEntrega)
+const accionCorreo = ref<'' | 'pdf' | 'correo'>('')
+const avisoCorreo = ref('')
+const errorCorreo = ref('')
+async function ordenIdActual(): Promise<number | null> {
+  const numero = String(traza.value?.resumen?.numeroOrden ?? '')
+  if (!numero) return null
+  let o = ordenesLista.value.find((x) => x.numeroOrden === numero)
+  if (!o) o = (await ordenesApi.listar(numero, '')).find((x) => x.numeroOrden === numero)
+  return o?.ordenId ?? null
+}
+async function comprobante(tipo: 'pdf' | 'correo') {
+  avisoCorreo.value = ''
+  errorCorreo.value = ''
+  accionCorreo.value = tipo
+  try {
+    const id = await ordenIdActual()
+    if (!id) throw new Error('No se encontró la orden.')
+    const numero = String(traza.value?.resumen?.numeroOrden ?? '')
+    if (tipo === 'pdf') await cajaApi.descargarComprobante(id, numero)
+    else avisoCorreo.value = (await cajaApi.enviarComprobante(id)).mensaje
+  } catch (e) {
+    errorCorreo.value = (e as Error).message
+  } finally {
+    accionCorreo.value = ''
+  }
+}
 const hayTotales = computed(() => Object.keys(totales.value).length > 0 && filas.value.length > 1
   && ![2, 10].includes(actual.value.numero)) // en 2 y 10 las filas repiten la factura
 
@@ -39,6 +189,11 @@ function elegir(n: number) {
   generado.value = false
   filtros.buscar = ''
   filtros.estado = '' // cada reporte tiene sus propios estados
+  enTabla.value = ''
+  orden.value = null
+  avisoCorreo.value = ''
+  errorCorreo.value = ''
+  if (n === 12) cargarOrdenes()
   if (!actual.value.obligatorio) generar()
 }
 
@@ -54,6 +209,8 @@ async function generar() {
     return
   }
   cargando.value = true
+  avisoCorreo.value = ''
+  errorCorreo.value = ''
   try {
     if (r.numero === 12) {
       traza.value = await reportesApi.trazabilidad(filtros.buscar)
@@ -80,6 +237,8 @@ async function generar() {
 
 function limpiar() {
   Object.assign(filtros, { desde: '', hasta: '', buscar: '', bodegaId: 0, estado: '' })
+  enTabla.value = ''
+  orden.value = null
   if (!actual.value.obligatorio) generar()
   else { traza.value = null; generado.value = false }
 }
@@ -87,7 +246,7 @@ function limpiar() {
 // Descargar lo que se ve en pantalla como CSV (abre en Excel)
 function descargarCsv() {
   const r = actual.value
-  const datos: Fila[] = r.numero === 12 ? (traza.value?.lineaTiempo ?? []) : filas.value
+  const datos: Fila[] = r.numero === 12 ? (traza.value?.lineaTiempo ?? []) : filasVista.value
   if (!datos.length) return
   const cols = Object.keys(datos[0]!)
   const celda = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`
@@ -143,8 +302,14 @@ function imprimirPdf() {
     contenido = `<dl class="ficha">${ficha}</dl><h3>Línea de tiempo</h3>`
       + tablaHtml(['fecha', 'etapa', 'detalle', 'usuario', 'monto'], traza.value.lineaTiempo)
   } else {
-    if (!filas.value.length) return
+    if (!filasVista.value.length) return
     const cols = columnas.value
+    const g = grafica.value
+    const graficaHtml = g
+      ? `<h3>${esc(g.titulo)}</h3><div class="barras">${g.barras
+        .map((b) => `<div class="b"><span class="n">${esc(b.nombre)}</span><span class="pista"><span style="width:${b.pct}%"></span></span><span class="v">${esc(b.texto)}</span></div>`)
+        .join('')}</div>`
+      : ''
     const pie = hayTotales.value
       ? `<tfoot><tr>${cols
         .map((c, i) => (c in totales.value
@@ -152,7 +317,8 @@ function imprimirPdf() {
           : `<td>${i === 0 ? '<b>Total</b>' : ''}</td>`))
         .join('')}</tr></tfoot>`
       : ''
-    contenido = `<p class="nota">${filas.value.length} registro(s)</p>` + tablaHtml(cols, filas.value, pie)
+    const enPantalla = enTabla.value.trim() ? ` · filtrados por «${esc(enTabla.value.trim())}»` : ''
+    contenido = graficaHtml + `<p class="nota">${filasVista.value.length} registro(s)${enPantalla}</p>` + tablaHtml(cols, filasVista.value, pie)
   }
 
   const nombre = `Reporte_${String(r.numero).padStart(2, '0')}_${r.titulo.replace(/\s+/g, '_')}`
@@ -178,6 +344,12 @@ function imprimirPdf() {
       border: 1px solid #d0d7e2; padding: 10px; }
     dt { color: #5a6472; font-size: 10px; }
     dd { margin: 0; font-weight: 700; }
+    .barras { margin: 0 0 12px; display: grid; gap: 4px; max-width: 760px; }
+    .b { display: grid; grid-template-columns: 180px 1fr 110px; gap: 8px; align-items: center; }
+    .b .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .pista { background: #eef1f6; height: 12px; border-radius: 3px; }
+    .pista span { display: block; height: 12px; background: #17375e; border-radius: 3px; }
+    .b .v { text-align: right; font-weight: 700; }
   </style></head><body>
     <header>
       <p class="marca">TechCare Solutions · Servicio técnico</p>
@@ -254,11 +426,22 @@ onMounted(async () => {
         <form class="filtros" novalidate @submit.prevent="generar">
           <label v-if="actual.buscar" class="campo grande">
             <span>{{ actual.obligatorio ? 'Número de orden' : 'Buscar' }}</span>
-            <input v-model="filtros.buscar" type="search" :placeholder="actual.buscar" />
+            <input
+v-model="filtros.buscar" type="search" :placeholder="actual.buscar"
+                   :list="actual.numero === 12 ? 'lista-ordenes' : undefined" />
+            <datalist v-if="actual.numero === 12" id="lista-ordenes">
+              <option v-for="o in ordenesLista" :key="o.ordenId" :value="o.numeroOrden">{{ o.cliente }} · {{ o.estado }}</option>
+            </datalist>
           </label>
           <template v-if="actual.fechas">
             <label class="campo"><span>Desde</span><input v-model="filtros.desde" type="date" /></label>
             <label class="campo"><span>Hasta</span><input v-model="filtros.hasta" type="date" /></label>
+            <div class="rapidos" role="group" aria-label="Fechas rápidas">
+              <button type="button" class="chip-btn" @click="rango('mes')">Este mes</button>
+              <button type="button" class="chip-btn" @click="rango('mesAnterior')">Mes anterior</button>
+              <button type="button" class="chip-btn" @click="rango('dias30')">Últimos 30 días</button>
+              <button type="button" class="chip-btn" @click="rango('anio')">Este año</button>
+            </div>
           </template>
           <label v-if="actual.estados" class="campo">
             <span>Estado</span>
@@ -290,8 +473,30 @@ onMounted(async () => {
 
         <!-- Reporte 12: resumen + línea de tiempo -->
         <template v-if="actual.numero === 12">
-          <p v-if="!generado && !error" class="vacio">Escriba un número de orden y presione «Generar».</p>
+          <template v-if="!traza?.resumen">
+            <p v-if="!generado && !error" class="nota">Escriba o elija el número de orden y presione «Generar», o toque una orden reciente:</p>
+            <div v-if="recientes.length" class="recientes">
+              <button v-for="o in recientes" :key="o.ordenId" type="button" class="reciente" @click="verOrden(o.numeroOrden)">
+                <b>{{ o.numeroOrden }}</b><span>{{ o.cliente }}</span><small>{{ o.estado }}</small>
+              </button>
+            </div>
+            <p v-else-if="!generado && !error" class="vacio">Escriba un número de orden y presione «Generar».</p>
+          </template>
           <template v-if="traza?.resumen">
+            <div class="correo">
+              <span>Comprobante de entrega <InfoTip texto="PDF con la factura, los pagos y quién recibió el equipo. Solo existe cuando la orden ya fue ENTREGADA en Caja." /></span>
+              <button type="button" class="btn" :disabled="!entregada || !!accionCorreo" @click="comprobante('pdf')">
+                {{ accionCorreo === 'pdf' ? 'Descargando…' : 'Descargar PDF' }}
+              </button>
+              <InfoTip texto="Descarga el comprobante de entrega en PDF a esta computadora." />
+              <button type="button" class="btn primario" :disabled="!entregada || !!accionCorreo" @click="comprobante('correo')">
+                {{ accionCorreo === 'correo' ? 'Enviando…' : 'Enviar al correo del cliente' }}
+              </button>
+              <InfoTip texto="Envía el comprobante en PDF al correo registrado del cliente, desde techcare126@gmail.com." derecha />
+            </div>
+            <p v-if="!entregada" class="nota">Los botones se habilitan cuando la orden se entrega (estado actual: <b>{{ traza.resumen.estadoActual ?? '—' }}</b>).</p>
+            <p v-if="avisoCorreo" class="aviso" role="status">{{ avisoCorreo }}</p>
+            <p v-if="errorCorreo" class="error" role="alert">{{ errorCorreo }}</p>
             <dl class="ficha">
               <div v-for="(v, k) in traza.resumen" :key="k">
                 <dt>{{ etiqueta(String(k)) }}</dt><dd>{{ valor(String(k), v) }}</dd>
@@ -317,15 +522,51 @@ onMounted(async () => {
 
         <!-- Reportes 1 al 11 -->
         <template v-else>
-          <p class="nota">{{ cargando ? 'Generando…' : `${filas.length} registro(s)` }}</p>
+          <!-- Tarjetas de resumen -->
+          <div v-if="filas.length && !cargando" class="tarjetas">
+            <div v-for="t in tarjetas" :key="t.titulo" class="tarjeta">
+              <span>{{ t.titulo }}</span><b>{{ t.texto }}</b>
+            </div>
+          </div>
+
+          <!-- Gráfica de barras -->
+          <figure v-if="grafica && !cargando" class="grafica">
+            <figcaption>{{ grafica.titulo }}</figcaption>
+            <div v-for="b in grafica.barras" :key="b.nombre" class="barra">
+              <span class="nombre" :title="b.nombre">{{ b.nombre }}</span>
+              <span class="pista"><span class="relleno" :style="{ width: b.pct + '%' }"></span></span>
+              <span class="cifra">{{ b.texto }}</span>
+            </div>
+          </figure>
+
+          <div class="sobre-tabla">
+            <p class="nota">
+              {{ cargando ? 'Generando…' : enTabla.trim() ? `${filasVista.length} de ${filas.length} registro(s)` : `${filas.length} registro(s)` }}
+              <span v-if="filas.length > 1"> · toque un encabezado para ordenar</span>
+            </p>
+            <label v-if="filas.length" class="campo buscar-tabla">
+              <span class="sr-only">Buscar en el resultado</span>
+              <input v-model="enTabla" type="search" placeholder="Buscar en el resultado…" />
+            </label>
+          </div>
           <div class="tabla-wrap">
             <table>
               <thead>
-                <tr><th v-for="c in columnas" :key="c" :class="{ der: esMoneda(c) }">{{ etiqueta(c) }}</th></tr>
+                <tr>
+                  <th
+v-for="c in columnas" :key="c" :class="{ der: esMoneda(c) }"
+                      :aria-sort="orden?.col === c ? (orden.asc ? 'ascending' : 'descending') : 'none'">
+                    <button type="button" class="orden-btn" @click="ordenarPor(c)">
+                      {{ etiqueta(c) }} <span class="flecha" aria-hidden="true">{{ flecha(c) }}</span>
+                    </button>
+                  </th>
+                </tr>
               </thead>
               <tbody>
-                <tr v-if="!cargando && !filas.length"><td class="vacio" :colspan="columnas.length || 1">Sin datos con esos filtros.</td></tr>
-                <tr v-for="(f, i) in filas" :key="i">
+                <tr v-if="!cargando && !filasVista.length">
+                  <td class="vacio" :colspan="columnas.length || 1">{{ filas.length ? 'Nada coincide con la búsqueda.' : 'Sin datos con esos filtros.' }}</td>
+                </tr>
+                <tr v-for="(f, i) in filasVista" :key="i">
                   <td v-for="c in columnas" :key="c" :class="{ der: esMoneda(c) || typeof f[c] === 'number', nowrap: c.startsWith('fecha') || c.startsWith('numero') }">
                     {{ valor(c, f[c] ?? null) }}
                   </td>
@@ -408,6 +649,50 @@ dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
 .chip.repuesto { background: #fff2d6; color: #7a4c00; }
 .chip.factura, .chip.pago { background: #dff3e4; color: #1d6b34; }
 .chip.entrega { background: #17375e; color: #fff; }
+
+/* Fechas rápidas */
+.rapidos { display: flex; gap: 6px; flex-wrap: wrap; flex-basis: 100%; }
+.chip-btn { font: inherit; font-size: 13px; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--c-input);
+  background: var(--c-surface); color: var(--c-title); cursor: pointer; }
+.chip-btn:hover { background: var(--c-sel); }
+.chip-btn:focus-visible { outline: 3px solid #c8962e; outline-offset: 1px; }
+
+/* Tarjetas de resumen */
+.tarjetas { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.tarjeta { border: 1px solid var(--c-border); border-left: 4px solid #c8962e; border-radius: 6px; padding: 10px 14px;
+  background: var(--c-surface); display: flex; flex-direction: column; gap: 2px; }
+.tarjeta span { font-size: 12.5px; color: var(--c-muted); }
+.tarjeta b { font-size: 20px; color: var(--c-title); font-variant-numeric: tabular-nums; }
+
+/* Gráfica de barras */
+.grafica { margin: 0; border: 1px solid var(--c-border); border-radius: 6px; padding: 14px 16px; background: var(--c-surface);
+  display: grid; gap: 6px; }
+.grafica figcaption { font-weight: 700; color: var(--c-title); margin-bottom: 4px; }
+.barra { display: grid; grid-template-columns: minmax(110px, 220px) 1fr minmax(80px, auto); gap: 10px; align-items: center; font-size: 13.5px; }
+.barra .nombre { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pista { background: var(--c-row); border-radius: 4px; height: 14px; overflow: hidden; }
+.relleno { display: block; height: 100%; background: linear-gradient(90deg, #17375e, #2f5c94); border-radius: 4px; }
+:root.dark .relleno { background: linear-gradient(90deg, #6d8fd1, #a5b8f0); }
+.barra .cifra { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* Buscar en el resultado y ordenar */
+.sobre-tabla { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.buscar-tabla { min-width: 240px; }
+.orden-btn { all: unset; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.orden-btn:focus-visible { outline: 2px solid #c8962e; outline-offset: 2px; }
+.flecha { font-size: 10px; opacity: 0.75; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Reporte 12 */
+.recientes { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.reciente { font: inherit; text-align: left; border: 1px solid var(--c-border); border-radius: 6px; padding: 10px 12px;
+  background: var(--c-surface); color: var(--c-text); cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.reciente:hover { border-color: #c8962e; background: var(--c-sel); }
+.reciente b { color: var(--c-title); }
+.reciente small { color: var(--c-muted); }
+.correo { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.correo span { font-weight: 600; color: var(--c-title); }
+.aviso { background: #dff3e4; color: #1d6b34; padding: 10px 14px; border-radius: 4px; margin: 0; }
 
 .btn { font: inherit; font-size: 15px; padding: 8px 14px; border-radius: 4px; border: 1px solid var(--c-input);
   background: var(--c-surface); color: var(--c-title); cursor: pointer; }
