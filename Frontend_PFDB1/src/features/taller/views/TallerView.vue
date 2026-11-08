@@ -137,7 +137,7 @@ function clienteNoAutorizo() {
   const o = orden.value
   if (!o) return
   const motivo = motivoNoAutoriza.value.trim()
-  if (!motivo) return void (errores.cancelar = 'Escriba el motivo (ej. el cliente no aceptó el costo).')
+  if (motivo.length < 10) return void (errores.cancelar = 'Escriba el motivo, mínimo 10 caracteres (ej. el cliente no aceptó el costo).')
   if (!window.confirm(`¿Cancelar la orden ${o.numeroOrden}? No se reparará ni se cobrará.`)) return
   ejecutar('cancelar', () => ordenesApi.cambiarEstado(o.ordenId, 7, authTaller.usuario?.usuarioId ?? 0,
     `Cliente no autorizó: ${motivo}`), `Orden ${o.numeroOrden} cancelada: el cliente no autorizó la reparación.`)
@@ -158,10 +158,20 @@ async function ejecutar(clave: string, accion: () => Promise<unknown>, ok: strin
   }
 }
 
+// Montos en quetzales: DECIMAL(10,2) en la base → de 0 a 99,999,999.99 y máximo 2 decimales
+function errorMonto(valor: unknown, nombre: string): string {
+  const n = Number(valor)
+  if (valor === '' || !Number.isFinite(n) || n < 0) return `${nombre} debe ser un número de 0 en adelante.`
+  if (n > 99999999.99) return `${nombre} es demasiado alto.`
+  if (Math.round(n * 100) !== n * 100) return `${nombre} admite como máximo 2 decimales.`
+  return ''
+}
+
 function registrarDiagnostico() {
   if (!orden.value) return
-  if (!fDiag.descripcion.trim()) return void (errores.diagnostico = 'Escriba la descripción del diagnóstico.')
-  if (fDiag.costo < 0) return void (errores.diagnostico = 'El costo estimado no puede ser negativo.')
+  if (fDiag.descripcion.trim().length < 10) return void (errores.diagnostico = 'Escriba la descripción del diagnóstico (mínimo 10 caracteres).')
+  const eDiag = errorMonto(fDiag.costo, 'El costo estimado')
+  if (eDiag) return void (errores.diagnostico = eDiag)
   const o = orden.value
   ejecutar('diagnostico', () => tallerApi.registrarDiagnostico({
     ordenId: o.ordenId,
@@ -184,7 +194,8 @@ function registrarActividad() {
   if (!rep.value) return
   const horas = fAct.horas === '' ? null : Number(fAct.horas)
   if (!fAct.descripcion.trim()) return void (errores.actividad = 'Describa la actividad realizada.')
-  if (horas !== null && !(horas > 0)) return void (errores.actividad = 'Las horas deben ser mayores que cero.')
+  if (horas !== null && !(horas > 0 && horas <= 24)) return void (errores.actividad = 'Las horas deben ser mayores que 0 y como máximo 24.')
+  if (horas !== null && Math.round(horas * 100) !== horas * 100) return void (errores.actividad = 'Las horas admiten como máximo 2 decimales.')
   const r = rep.value
   ejecutar('actividad', () => tallerApi.registrarActividad({
     reparacionId: r.reparacionId, descripcion: fAct.descripcion.trim(), horasTrabajadas: horas,
@@ -195,8 +206,8 @@ function asignarRepuesto() {
   if (!rep.value) return
   const elegido = repuestoElegido.value
   if (!elegido) return void (errores.repuesto = 'Seleccione el repuesto y la bodega.')
-  const cantidad = Math.trunc(Number(fRep.cantidad))
-  if (!(cantidad > 0)) return void (errores.repuesto = 'La cantidad debe ser mayor que cero.')
+  const cantidad = Number(fRep.cantidad)
+  if (!Number.isInteger(cantidad) || cantidad <= 0) return void (errores.repuesto = 'La cantidad debe ser un número entero mayor que cero.')
   if (cantidad > elegido.existencia)
     return void (errores.repuesto = `Solo hay ${elegido.existencia} en la bodega ${elegido.bodega}.`)
   const r = rep.value
@@ -207,7 +218,8 @@ function asignarRepuesto() {
 
 function finalizar() {
   if (!rep.value || !orden.value) return
-  if (fFin.costo < 0) return void (errores.finalizar = 'El costo de mano de obra no puede ser negativo.')
+  const eFin = errorMonto(fFin.costo, 'El costo de mano de obra')
+  if (eFin) return void (errores.finalizar = eFin)
   if (!fFin.descripcion.trim()) return void (errores.finalizar = 'Describa el trabajo realizado antes de finalizar.')
   const r = rep.value
   const o = orden.value

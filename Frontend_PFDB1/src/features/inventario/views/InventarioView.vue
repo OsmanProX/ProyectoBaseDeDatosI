@@ -215,7 +215,7 @@ const buscarCat = ref('')
 
 const soloNumeros = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max)
 const soloLetras = (v: string) => v.replace(/[^\p{L} ]/gu, '')
-const soloNit = (v: string) => v.replace(/[^\d-]/g, '').slice(0, 15)
+const soloNit = (v: string) => v.toUpperCase().replace(/[^\dK-]/g, '').slice(0, 15)
 const norm = (v: string) => v.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
 
 const repuestosOrdenados = computed(() =>
@@ -252,10 +252,10 @@ async function guardarProveedorCatalogo() {
   let proveedorId = provSel.value
   if (!proveedorId) {
     const nit = nuevoProv.nit.trim().toUpperCase()
-    if (!/^\d{1,13}-?\d$/.test(nit)) return void (nuevoProv.error = 'NIT inválido. Ejemplo: 1234567-8.')
+    if (!/^\d{1,13}-?[\dK]$/.test(nit)) return void (nuevoProv.error = 'NIT inválido. Ejemplo: 1234567-8 o 1234567-K.')
     if (!nuevoProv.nombre.trim()) return void (nuevoProv.error = 'Escriba el nombre del proveedor.')
     if (nuevoProv.telefono.length !== 8) return void (nuevoProv.error = 'El teléfono debe tener 8 números.')
-    if (nuevoProv.contacto && nuevoProv.contacto.length !== 8) return void (nuevoProv.error = 'El teléfono de contacto debe tener 8 números.')
+    if (nuevoProv.contacto.trim() && nuevoProv.contacto.trim().length < 3) return void (nuevoProv.error = 'El nombre del contacto debe tener al menos 3 letras.')
     if (nuevoProv.correo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevoProv.correo.trim()))
       return void (nuevoProv.error = 'Correo inválido.')
   }
@@ -597,9 +597,9 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
           <p class="mini-titulo">Datos del proveedor nuevo</p>
           <div class="mini-campos">
             <label class="campo"><span>NIT</span><input v-model="nuevoProv.nit" maxlength="15" inputmode="numeric" placeholder="1234567-8" @input="nuevoProv.nit = soloNit(nuevoProv.nit)" /></label>
-            <label class="campo"><span>Nombre</span><input v-model="nuevoProv.nombre" maxlength="150" @input="nuevoProv.nombre = soloLetras(nuevoProv.nombre)" /></label>
+            <label class="campo"><span>Nombre</span><input v-model="nuevoProv.nombre" maxlength="150" @input="nuevoProv.nombre = nuevoProv.nombre.replace(/[^\p{L}\p{N} .,&-]/gu, '')" /></label>
             <label class="campo"><span>Teléfono</span><input v-model="nuevoProv.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" @input="nuevoProv.telefono = soloNumeros(nuevoProv.telefono, 8)" /></label>
-            <label class="campo"><span>Tel. contacto (opcional)</span><input v-model="nuevoProv.contacto" maxlength="8" inputmode="numeric" @input="nuevoProv.contacto = soloNumeros(nuevoProv.contacto, 8)" /></label>
+            <label class="campo"><span>Persona de contacto (opcional)</span><input v-model="nuevoProv.contacto" maxlength="100" placeholder="Ej. Karla Pineda" @input="nuevoProv.contacto = soloLetras(nuevoProv.contacto)" /></label>
             <label class="campo"><span>Correo (opcional)</span><input v-model="nuevoProv.correo" type="email" maxlength="100" /></label>
             <label class="campo"><span>Dirección (opcional)</span><input v-model="nuevoProv.direccion" maxlength="200" /></label>
           </div>

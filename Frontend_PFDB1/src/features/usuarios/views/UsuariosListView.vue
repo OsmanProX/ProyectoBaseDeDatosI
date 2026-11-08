@@ -94,17 +94,18 @@ function abrir(u?: UsuarioFila) {
 
 const RX_USUARIO = /^[a-z0-9._]{3,30}$/
 const RX_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const RX_TEL = /^[0-9 +-]{8,15}$/
+const RX_TEL = /^\d{8}$/
 
 function validar(): string {
   if (!RX_USUARIO.test(form.nombreUsuario.trim().toLowerCase()))
     return 'Usuario: de 3 a 30 caracteres, solo letras minúsculas, números, punto o guion bajo.'
-  if (!form.nombreCompleto.trim()) return 'El nombre completo es obligatorio.'
+  if (!/^[\p{L} ]{3,}$/u.test(form.nombreCompleto.trim())) return 'El nombre completo es obligatorio (solo letras, mínimo 3).'
   if (!RX_CORREO.test(form.correo.trim())) return 'Correo inválido.'
-  if (form.telefono.trim() && !RX_TEL.test(form.telefono.trim())) return 'Teléfono inválido (8 a 15 dígitos).'
+  if (form.telefono.trim() && !RX_TEL.test(form.telefono.trim())) return 'El teléfono debe tener 8 dígitos.'
   if (!form.rolIds.length && !rolesOcultos.value.length) return 'Seleccione al menos un rol.'
   if (!editandoId.value) {
     if (form.contrasena.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
+    if (!/\p{L}/u.test(form.contrasena) || !/\d/.test(form.contrasena)) return 'La contraseña debe tener al menos una letra y un número.'
     if (form.contrasena !== form.confirmar) return 'Las contraseñas no coinciden.'
   }
   return ''
@@ -175,6 +176,8 @@ function pedirClave(u: UsuarioFila) {
 async function guardarClave() {
   if (!elegido.value) return
   if (clave.nueva.length < 8) return void (errorClave.value = 'La contraseña debe tener al menos 8 caracteres.')
+  if (!/\p{L}/u.test(clave.nueva) || !/\d/.test(clave.nueva))
+    return void (errorClave.value = 'La contraseña debe tener al menos una letra y un número.')
   if (clave.nueva !== clave.confirmar) return void (errorClave.value = 'Las contraseñas no coinciden.')
   procesando.value = true
   errorClave.value = ''
@@ -285,7 +288,7 @@ async function guardarClave() {
           </label>
           <label class="campo">
             <span>Teléfono (opcional)</span>
-            <input v-model="form.telefono" maxlength="15" inputmode="tel" />
+            <input v-model="form.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" @input="form.telefono = form.telefono.replace(/\D/g, '').slice(0, 8)" />
           </label>
         </div>
         <div v-if="!editandoId" class="fila">
@@ -298,7 +301,7 @@ async function guardarClave() {
             <input v-model="form.confirmar" type="password" autocomplete="new-password" />
           </label>
         </div>
-        <p v-if="!editandoId" class="nota">Mínimo 8 caracteres. Se guarda cifrada (hash), nunca en texto plano.</p>
+        <p v-if="!editandoId" class="nota">Mínimo 8 caracteres, con al menos una letra y un número. Se guarda cifrada (hash), nunca en texto plano.</p>
         <p v-if="errorForm" class="error" role="alert">{{ errorForm }}</p>
         <div class="botones">
           <button type="button" class="btn" @click="dlgForm?.close()">Cancelar</button>
@@ -338,7 +341,7 @@ async function guardarClave() {
             <input v-model="clave.confirmar" type="password" autocomplete="new-password" />
           </label>
         </div>
-        <p class="nota">Mínimo 8 caracteres.</p>
+        <p class="nota">Mínimo 8 caracteres, con al menos una letra y un número.</p>
         <p v-if="errorClave" class="error" role="alert">{{ errorClave }}</p>
         <div class="botones">
           <button type="button" class="btn" @click="dlgClave?.close()">Cancelar</button>

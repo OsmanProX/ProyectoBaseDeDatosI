@@ -81,11 +81,11 @@ function abrirEditar(c: Cliente) {
 // Validacion en la interfaz (el backend vuelve a validar)
 function validar(): boolean {
   limpiarErrores()
-  if (!form.nombreRazonSocial.trim()) errores.nombreRazonSocial = 'Escriba el nombre o la razón social.'
+  if (form.nombreRazonSocial.trim().length < 3) errores.nombreRazonSocial = 'Escriba el nombre o la razón social (mínimo 3 caracteres).'
   if (!form.nit.trim()) errores.nit = 'Escriba el NIT.'
   else if (!/^(CF|[0-9]{1,13}-?[0-9Kk])$/i.test(form.nit.trim()))
     errores.nit = 'NIT inválido. Ejemplo: 1234567-8, o CF si es consumidor final.'
-  if (!form.telefono.trim()) errores.telefono = 'Escriba un teléfono.'
+  if (!/^\d{8}$/.test(form.telefono.trim())) errores.telefono = 'El teléfono debe tener 8 dígitos.'
   if (!form.correo.trim()) errores.correo = 'Escriba el correo.'
   else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim()))
     errores.correo = 'Correo inválido.'
@@ -243,19 +243,19 @@ async function activar(c: Cliente) {
 
         <label class="campo">
           <span>{{ form.tipoCliente === 'EMPRESARIAL' ? 'Razón social' : 'Nombre completo' }}</span>
-          <input v-model="form.nombreRazonSocial" maxlength="150" :aria-invalid="!!errores.nombreRazonSocial" />
+          <input v-model="form.nombreRazonSocial" maxlength="150" :aria-invalid="!!errores.nombreRazonSocial" @input="form.nombreRazonSocial = form.nombreRazonSocial.replace(/[^\p{L}\p{N} .,&-]/gu, '')" />
           <small v-if="errores.nombreRazonSocial">{{ errores.nombreRazonSocial }}</small>
         </label>
 
         <div class="fila">
           <label class="campo">
             <span>NIT</span>
-            <input v-model="form.nit" maxlength="15" placeholder="1234567-8 o CF" :aria-invalid="!!errores.nit" />
+            <input v-model="form.nit" maxlength="15" placeholder="1234567-8 o CF" :aria-invalid="!!errores.nit" @input="form.nit = form.nit.toUpperCase().replace(/[^\dKCF-]/g, '')" />
             <small v-if="errores.nit">{{ errores.nit }}</small>
           </label>
           <label class="campo">
             <span>Teléfono</span>
-            <input v-model="form.telefono" maxlength="15" :aria-invalid="!!errores.telefono" />
+            <input v-model="form.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" :aria-invalid="!!errores.telefono" @input="form.telefono = form.telefono.replace(/\D/g, '').slice(0, 8)" />
             <small v-if="errores.telefono">{{ errores.telefono }}</small>
           </label>
         </div>

@@ -239,7 +239,7 @@ function cobrar() {
 
 function entregar() {
   if (!orden.value) return
-  if (!fEnt.nombreRecibe.trim()) return void (errores.entrega = 'Escriba el nombre de la persona que recibe.')
+  if (fEnt.nombreRecibe.trim().length < 3) return void (errores.entrega = 'Escriba el nombre de la persona que recibe (solo letras, mínimo 3).')
   const o = orden.value
   ejecutar('entrega', () => cajaApi.entregar({
     ordenId: o.ordenId,
@@ -455,7 +455,7 @@ function entregar() {
               <div class="fila">
                 <label class="campo">
                   <span>Nombre de quien recibe</span>
-                  <input v-model="fEnt.nombreRecibe" maxlength="100" />
+                  <input v-model="fEnt.nombreRecibe" maxlength="100" placeholder="Ej. Juan Pérez" @input="fEnt.nombreRecibe = fEnt.nombreRecibe.replace(/[^\p{L} ]/gu, '')" />
                 </label>
                 <label class="campo">
                   <span>Observaciones (opcional)</span>
