@@ -3,6 +3,7 @@
 // Acceso: ADMINISTRADOR y RECEPCION (menú, router y policy GestionarEquipos del backend).
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
+import InfoTip from '@/shared/components/InfoTip.vue'
 import {
   equiposApi,
   type Equipo, type TipoEquipo, type ClienteOpcion, type DatosEquipo,
@@ -270,7 +271,7 @@ async function activar(e: Equipo) {
         <p v-if="errorForm" class="error" role="alert">{{ errorForm }}</p>
 
         <label class="campo">
-          <span>Cliente</span>
+          <span>Cliente <InfoTip v-if="editando" texto="No se puede cambiar: las órdenes, facturas y el historial de este equipo están a nombre de este cliente. Si el equipo cambió de dueño, desactívelo y regístrelo de nuevo con el cliente nuevo." /></span>
           <select v-model.number="form.clienteId" :disabled="!!editando" :aria-invalid="!!errores.clienteId">
             <option :value="0" disabled>Seleccione un cliente…</option>
             <option v-for="c in (editando ? clientes : clientesActivos)" :key="c.clienteId" :value="c.clienteId">
@@ -290,7 +291,7 @@ async function activar(e: Equipo) {
             <small v-if="errores.tipoEquipoId">{{ errores.tipoEquipoId }}</small>
           </label>
           <label class="campo">
-            <span>Número de serie</span>
+            <span>Número de serie <InfoTip v-if="editando" derecha texto="No se puede cambiar: es el identificador único del equipo y con él se busca todo su historial de reparaciones. Si se escribió mal, desactive el equipo y regístrelo de nuevo." /></span>
             <input
 v-model="form.numeroSerie" maxlength="50" :disabled="!!editando" autocomplete="off"
                    placeholder="Ej. HP5CD1234XYZ" :aria-invalid="!!errores.numeroSerie" />
