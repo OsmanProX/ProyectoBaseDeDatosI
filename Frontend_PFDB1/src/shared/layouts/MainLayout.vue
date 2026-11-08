@@ -33,7 +33,7 @@ const navItems = computed(() =>
   staticNavigation.filter(
     (item) =>
       (!item.permiso || auth.tienePermiso(item.permiso)) &&
-      (!item.roles || item.roles.includes(auth.rol)) &&
+      (!item.roles || auth.tieneRol(...item.roles)) &&
       !(item.sinCliente && auth.rol === 'CLIENTE'),
   ))
 // Se muestra el título de la sección solo en el primer elemento de cada grupo

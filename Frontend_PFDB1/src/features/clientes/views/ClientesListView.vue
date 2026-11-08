@@ -11,7 +11,7 @@ import InfoTip from '@/shared/components/InfoTip.vue'
 
 const auth = useAuthStore()
 // Mismos roles que la policy del backend (Program.cs)
-const puedeEditar = computed(() => ['ADMINISTRADOR', 'RECEPCION'].includes(auth.rol))
+const puedeEditar = computed(() => auth.tieneRol('ADMINISTRADOR', 'RECEPCION'))
 
 // ---------- listado ----------
 const clientes = ref<Cliente[]>([])

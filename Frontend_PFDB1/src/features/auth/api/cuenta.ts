@@ -23,8 +23,11 @@ export interface MiCuenta {
   direccion: string | null
 }
 
+// Traduce el error del índice único de correo (script 15) a un mensaje claro
+const claro = (m: string) => (/UX_Cliente_Correo/i.test(m) ? 'Ese correo ya está registrado. Use "¿Olvidó su contraseña?" si es suyo.' : m)
+
 const post = (path: string, body: unknown, method: 'POST' | 'PUT' = 'POST') =>
-  apiFetch<{ mensaje: string }>(path, { method, body: JSON.stringify(body) })
+  apiFetch<{ mensaje: string }>(path, { method, body: JSON.stringify(body) }, claro)
 
 export const cuentaApi = {
   registro: (f: RegistroForm) => post('/api/auth/registro', {

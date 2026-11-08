@@ -183,7 +183,7 @@ router.beforeEach((to) => {
   }
 
   // Módulos bloqueados por rol (mismos roles que las policies del backend)
-  if (to.meta.roles && !to.meta.roles.includes(auth.rol)) {
+  if (to.meta.roles && !auth.tieneRol(...to.meta.roles)) {
     return { name: 'acceso-denegado' }
   }
 

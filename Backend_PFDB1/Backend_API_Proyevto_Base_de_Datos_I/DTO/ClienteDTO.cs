@@ -72,9 +72,12 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                 await connection.OpenAsync();
 
                 var lista = await connection.QueryAsync<EquipoDeClienteModel>(
-                    @"SELECT EquipoId, TipoEquipo, Marca, Modelo, NumeroSerie
-                      FROM vw_Equipo
-                      WHERE ClienteId = @Id AND Estado = 'ACTIVO'
+                    // OrdenAbierta: número de la orden sin cerrar (no ENTREGADO=6 ni CANCELADO=7), igual que la regla 50108
+                    @"SELECT e.EquipoId, e.TipoEquipo, e.Marca, e.Modelo, e.NumeroSerie,
+                             (SELECT TOP 1 o.NumeroOrden FROM OrdenServicio o
+                              WHERE o.EquipoId = e.EquipoId AND o.EstadoOrdenId NOT IN (6, 7)) AS OrdenAbierta
+                      FROM vw_Equipo e
+                      WHERE e.ClienteId = @Id AND e.Estado = 'ACTIVO'
                       ORDER BY EquipoId",
                     new { Id = id });
 

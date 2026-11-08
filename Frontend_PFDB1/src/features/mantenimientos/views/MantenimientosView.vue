@@ -12,7 +12,7 @@ import {
 } from '../api/mantenimientos'
 
 const auth = useAuthStore()
-const esAdmin = computed(() => auth.rol === 'ADMINISTRADOR')
+const esAdmin = computed(() => auth.tieneRol('ADMINISTRADOR'))
 
 const moneda = (n: number | null | undefined) =>
   (n ?? 0).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' })

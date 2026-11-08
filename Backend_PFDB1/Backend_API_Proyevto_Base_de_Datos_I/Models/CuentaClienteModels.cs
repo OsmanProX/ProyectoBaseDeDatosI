@@ -7,6 +7,9 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
         public string NombreUsuario { get; set; } = string.Empty;
         public string Correo { get; set; } = string.Empty;
         public string NombreCompleto { get; set; } = string.Empty;
+        // Solo en recuperar contraseña: para revertir si el correo no se pudo enviar
+        public string? HashAnterior { get; set; }
+        public bool DebeCambiarAnterior { get; set; }
     }
 
     // Fila de sp_Cliente_MisOrdenes (portal del cliente, solo lectura)

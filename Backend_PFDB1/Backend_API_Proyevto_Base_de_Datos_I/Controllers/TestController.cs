@@ -1,8 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Data.SqlClient;
 
 namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers;
 
+// Prueba de conexión: solo el ADMINISTRADOR (expone el nombre de la base y errores de SQL)
+[Authorize(Roles = "ADMINISTRADOR")]
 [ApiController]
 [Route("api/[controller]")]
 public class TestController : ControllerBase

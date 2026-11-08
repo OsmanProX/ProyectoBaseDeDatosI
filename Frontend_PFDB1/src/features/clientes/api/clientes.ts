@@ -44,6 +44,7 @@ const cuerpo = (d: ClienteForm) => ({
 })
 
 function mensajeClaro(texto: string): string {
+  if (/UX_Cliente_Correo/i.test(texto)) return 'Ese correo ya pertenece a otro cliente.'
   if (/UX_Cliente_NIT|duplicate key/i.test(texto)) return 'Ya existe un cliente con ese NIT.'
   return texto
 }

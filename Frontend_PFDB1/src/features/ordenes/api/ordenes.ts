@@ -83,6 +83,8 @@ export interface OpcionEquipo {
   marca: string
   modelo: string
   numeroSerie: string
+  /** Número de la orden sin cerrar del equipo (no se le puede abrir otra) */
+  ordenAbierta?: string | null
 }
 
 // Usuario con el que se trabaja mientras no está el login (lo reemplaza Gerson)
