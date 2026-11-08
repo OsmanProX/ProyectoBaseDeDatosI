@@ -5,6 +5,7 @@
 // Nada se borra: se inactiva. Las reglas las valida la base (script 12).
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
+import InfoTip from '@/shared/components/InfoTip.vue'
 import {
   mantenimientoApi,
   type Categoria, type TipoEquipo, type Repuesto, type RepuestoBodega, type Bodega, type Proveedor,
@@ -12,10 +13,22 @@ import {
 } from '../api/mantenimientos'
 
 const auth = useAuthStore()
-const esAdmin = computed(() => auth.rol === 'ADMINISTRADOR')
+const esAdmin = computed(() => auth.tieneRol('ADMINISTRADOR'))
 
 const moneda = (n: number | null | undefined) =>
   (n ?? 0).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' })
+
+// Filtros de escritura (las mismas reglas que Compras): se limpia lo que no corresponde mientras se escribe
+const soloNumeros = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max)
+const soloLetras = (v: string) => v.replace(/[^\p{L} ]/gu, '')
+const soloLetrasNumeros = (v: string) => v.replace(/[^\p{L}\p{N} ]/gu, '')
+const soloNit = (v: string) => v.toUpperCase().replace(/[^\dK-]/g, '').slice(0, 15)
+// Nombre de repuesto: letras, números y los signos de las medidas (15.6", 1920×1080, M.2, 10.8 V, 4400 mAh)
+const textoRepuesto = (v: string) => v.replace(/[^\p{L}\p{N} .,\-"'/()×+#%]/gu, '')
+// Razón social: letras, números y los signos de "Distribuidora Maya, S.A." o "Redes & Datos"
+const textoEmpresa = (v: string) => v.replace(/[^\p{L}\p{N} .,&-]/gu, '')
+// Código: siempre en mayúsculas, solo letras, números y guion (formato REP-0001)
+const soloCodigo = (v: string) => v.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, 8)
 
 type Pestana = 'repuestos' | 'proveedores' | 'bodegas' | 'categorias' | 'tipos'
 const todas: { id: Pestana; titulo: string; admin?: boolean }[] = [
@@ -123,6 +136,7 @@ function abrir(tipo: Pestana, fila?: Repuesto | Proveedor | Bodega | Categoria |
       precioVenta: r?.precioVenta ?? 0, bodegaId: r ? 0 : (bodegasActivas.value[0]?.bodegaId ?? 0), stockMinimo: 0,
     })
     editando.value = { tipo, id: r?.repuestoId ?? null }
+    if (!r) sugerirCodigo()
   } else if (tipo === 'proveedores') {
     const p = fila as Proveedor | undefined
     Object.assign(fProveedor, {
@@ -146,31 +160,73 @@ function abrir(tipo: Pestana, fila?: Repuesto | Proveedor | Bodega | Categoria |
   dlgForm.value?.showModal()
 }
 
-const RX_NIT = /^[0-9]+-?[0-9K]$/i
-const RX_TEL = /^[0-9 +-]{8,15}$/
-const RX_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Sugiere el siguiente código libre (REP-0035 si el último es REP-0034), contando también los inactivos
+const todosRepuestos = ref<Repuesto[]>([])
+async function sugerirCodigo() {
+  try {
+    const todos = await mantenimientoApi.repuestos({ buscar: '', categoriaId: 0, estado: '' })
+    todosRepuestos.value = todos
+    const max = Math.max(0, ...todos.map((x) => Number(/^REP-(\d+)$/.exec(x.codigo)?.[1] ?? 0)))
+    if (editando.value?.tipo === 'repuestos' && !editando.value.id && !fRepuesto.codigo)
+      fRepuesto.codigo = `REP-${String(max + 1).padStart(4, '0')}`
+  } catch {
+    // si falla, el usuario escribe el código a mano
+  }
+}
 
-// Mismas reglas que la base, para avisar antes de enviar
+const RX_CODIGO = /^REP-\d{4}$/
+
+// Estado del código mientras se escribe (tipo semáforo): rojo = no se puede, amarillo = incompleto, verde = disponible
+const estadoCodigo = computed<{ color: 'rojo' | 'amarillo' | 'verde' | 'gris'; texto: string } | null>(() => {
+  if (editando.value?.tipo !== 'repuestos') return null
+  if (editando.value.id) return { color: 'gris', texto: 'El código identifica al repuesto y no se cambia.' }
+  const c = fRepuesto.codigo.trim()
+  if (!c) return { color: 'amarillo', texto: 'Escriba el código. Formato REP-0001.' }
+  if (!'REP-'.startsWith(c.slice(0, 4)) || (c.length > 4 && !/^REP-\d{1,4}$/.test(c)))
+    return { color: 'rojo', texto: 'Código no válido. Debe empezar con REP- y llevar 4 dígitos.' }
+  if (!RX_CODIGO.test(c)) return { color: 'amarillo', texto: `Incompleto: faltan ${8 - c.length} carácter(es). Ej. REP-0001.` }
+  const existe = todosRepuestos.value.find((r) => r.codigo.toUpperCase() === c)
+  if (existe) return { color: 'rojo', texto: `Ya existe: ${existe.codigo} · ${existe.nombre}${existe.estado === 'INACTIVO' ? ' (inactivo)' : ''}.` }
+  return { color: 'verde', texto: 'Disponible.' }
+})
+const RX_NIT = /^\d{1,13}-?[\dK]$/
+const RX_TEL = /^\d{8}$/
+const RX_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const PRECIO_MAX = 99999999.99 // DECIMAL(10,2)
+const dosDecimales = (n: number) => Math.round(n * 100) === n * 100
+
+function validarPrecio(valor: number, nombre: string): string {
+  const n = Number(valor)
+  if (!Number.isFinite(n) || n <= 0) return `Ingrese el ${nombre} (mayor a Q 0.00).`
+  if (n > PRECIO_MAX) return `El ${nombre} es demasiado alto.`
+  if (!dosDecimales(n)) return `El ${nombre} admite como máximo 2 decimales.`
+  return ''
+}
+
+// Mismas reglas que la base y que Compras, para avisar antes de enviar
 function validar(tipo: Pestana): string {
   if (tipo === 'repuestos') {
     const f = fRepuesto
+    if (!RX_CODIGO.test(f.codigo.trim())) return 'Código inválido. Use el formato REP-0001 (REP, guion y 4 dígitos).'
+    if (!editando.value?.id && estadoCodigo.value?.color === 'rojo') return estadoCodigo.value.texto
     if (!f.categoriaId) return 'Seleccione la categoría.'
-    if (!f.codigo.trim()) return 'El código es obligatorio.'
-    if (!f.nombre.trim()) return 'El nombre es obligatorio.'
-    if (!(Number(f.precioCompraReferencia) >= 0) || !(Number(f.precioVenta) >= 0)) return 'Los precios no pueden ser negativos.'
+    if (f.nombre.trim().length < 3) return 'El nombre es obligatorio (mínimo 3 caracteres).'
+    const e = validarPrecio(f.precioCompraReferencia, 'precio de compra') || validarPrecio(f.precioVenta, 'precio de venta')
+    if (e) return e
     if (Number(f.precioVenta) < Number(f.precioCompraReferencia)) return 'El precio de venta no puede ser menor al de compra.'
     if (!Number.isInteger(Number(f.stockMinimo)) || Number(f.stockMinimo) < 0) return 'El stock mínimo debe ser un entero de 0 en adelante.'
   } else if (tipo === 'proveedores') {
     const f = fProveedor
-    if (!RX_NIT.test(f.nit.trim())) return 'NIT inválido. Ejemplo: 1234567-8.'
-    if (!f.nombre.trim()) return 'El nombre es obligatorio.'
-    if (!RX_TEL.test(f.telefono.trim())) return 'Teléfono inválido (8 a 15 dígitos).'
-    if (f.correo.trim() && !RX_CORREO.test(f.correo.trim())) return 'Correo inválido.'
+    if (!RX_NIT.test(f.nit.trim())) return 'NIT inválido. Ejemplo: 1234567-8 o 1234567-K.'
+    if (f.nombre.trim().length < 3) return 'El nombre o razón social es obligatorio (mínimo 3 caracteres).'
+    if (!RX_TEL.test(f.telefono.trim())) return 'El teléfono debe tener 8 dígitos.'
+    if (f.contacto.trim() && f.contacto.trim().length < 3) return 'El nombre del contacto debe tener al menos 3 letras.'
+    if (f.correo.trim() && !RX_CORREO.test(f.correo.trim())) return 'Correo inválido. Ejemplo: ventas@proveedor.com.'
   } else if (tipo === 'bodegas') {
-    if (!fBodega.nombre.trim()) return 'El nombre es obligatorio.'
+    if (fBodega.nombre.trim().length < 3) return 'El nombre es obligatorio (mínimo 3 caracteres).'
   } else if (tipo === 'categorias') {
-    if (!fCategoria.nombre.trim()) return 'El nombre es obligatorio.'
-  } else if (!fTipo.nombre.trim()) return 'El nombre es obligatorio.'
+    if (fCategoria.nombre.trim().length < 3) return 'El nombre es obligatorio (mínimo 3 caracteres).'
+  } else if (fTipo.nombre.trim().length < 3) return 'El nombre es obligatorio (solo letras, mínimo 3).'
   return ''
 }
 
@@ -463,6 +519,7 @@ class="btn enlace" :class="{ peligro: c.activo }"
           </tbody>
         </table>
       </div>
+      <p class="nota pie">Una categoría con repuestos activos no se puede inactivar.</p>
     </section>
 
     <!-- ===== Tipos de equipo ===== -->
@@ -494,8 +551,12 @@ class="btn enlace" :class="{ peligro: c.activo }"
         <template v-if="editando.tipo === 'repuestos'">
           <div class="fila">
             <label class="campo">
-              <span>Código</span>
-              <input v-model="fRepuesto.codigo" maxlength="20" placeholder="REP-0031" />
+              <span>Código <InfoTip :texto="editando.id ? 'El código identifica al repuesto y no se cambia.' : 'Se sugiere el siguiente código libre. Formato REP-0001.'" /></span>
+              <input
+v-model="fRepuesto.codigo" maxlength="8" placeholder="REP-0001" :readonly="!!editando.id"
+                     :class="estadoCodigo ? 'borde-' + estadoCodigo.color : ''"
+                     @input="fRepuesto.codigo = soloCodigo(fRepuesto.codigo)" />
+              <small v-if="estadoCodigo" class="semaforo" :class="estadoCodigo.color" aria-live="polite">{{ estadoCodigo.texto }}</small>
             </label>
             <label class="campo">
               <span>Categoría</span>
@@ -507,7 +568,9 @@ class="btn enlace" :class="{ peligro: c.activo }"
           </div>
           <label class="campo">
             <span>Nombre</span>
-            <input v-model="fRepuesto.nombre" maxlength="100" />
+            <input
+v-model="fRepuesto.nombre" maxlength="100" placeholder="Ej. Pantalla LED 15.6&quot; HD 30 pines"
+                   @input="fRepuesto.nombre = textoRepuesto(fRepuesto.nombre)" />
           </label>
           <label class="campo">
             <span>Descripción (opcional)</span>
@@ -515,24 +578,24 @@ class="btn enlace" :class="{ peligro: c.activo }"
           </label>
           <div class="fila">
             <label class="campo">
-              <span>Precio de compra (Q)</span>
-              <input v-model.number="fRepuesto.precioCompraReferencia" type="number" min="0" step="0.01" />
+              <span>Precio de compra (Q) <InfoTip texto="Precio de referencia. En cada compra se registra el costo real." /></span>
+              <input v-model.number="fRepuesto.precioCompraReferencia" type="number" min="0.01" max="99999999.99" step="0.01" placeholder="0.00" />
             </label>
             <label class="campo">
-              <span>Precio de venta (Q)</span>
-              <input v-model.number="fRepuesto.precioVenta" type="number" min="0" step="0.01" />
+              <span>Precio de venta (Q) <InfoTip texto="Precio que se cobra al cliente. No puede ser menor al de compra." /></span>
+              <input v-model.number="fRepuesto.precioVenta" type="number" min="0.01" max="99999999.99" step="0.01" placeholder="0.00" />
             </label>
           </div>
           <div v-if="!editando.id" class="fila">
             <label class="campo">
-              <span>Bodega donde se guarda</span>
+              <span>Bodega donde se guarda <InfoTip texto="Opcional. Crea el registro de inventario en esa bodega con existencia 0." /></span>
               <select v-model.number="fRepuesto.bodegaId">
                 <option :value="0">Ninguna por ahora</option>
                 <option v-for="b in bodegasActivas" :key="b.bodegaId" :value="b.bodegaId">{{ b.nombre }}</option>
               </select>
             </label>
             <label class="campo">
-              <span>Stock mínimo</span>
+              <span>Stock mínimo <InfoTip texto="Cuando la existencia llega a este número, el repuesto aparece como BAJO MÍNIMO en Inventario." /></span>
               <input v-model.number="fRepuesto.stockMinimo" type="number" min="0" step="1" :disabled="!fRepuesto.bodegaId" />
             </label>
           </div>
@@ -543,21 +606,25 @@ class="btn enlace" :class="{ peligro: c.activo }"
           <div class="fila">
             <label class="campo">
               <span>NIT</span>
-              <input v-model="fProveedor.nit" maxlength="15" placeholder="1234567-8" />
+              <input v-model="fProveedor.nit" maxlength="15" placeholder="1234567-8" @input="fProveedor.nit = soloNit(fProveedor.nit)" />
             </label>
             <label class="campo">
               <span>Teléfono</span>
-              <input v-model="fProveedor.telefono" maxlength="15" inputmode="tel" />
+              <input
+v-model="fProveedor.telefono" maxlength="8" inputmode="numeric" placeholder="22001000"
+                     @input="fProveedor.telefono = soloNumeros(fProveedor.telefono, 8)" />
             </label>
           </div>
           <label class="campo">
             <span>Nombre o razón social</span>
-            <input v-model="fProveedor.nombre" maxlength="150" />
+            <input
+v-model="fProveedor.nombre" maxlength="150" placeholder="Ej. Distribuidora Maya, S.A."
+                   @input="fProveedor.nombre = textoEmpresa(fProveedor.nombre)" />
           </label>
           <div class="fila">
             <label class="campo">
-              <span>Contacto (opcional)</span>
-              <input v-model="fProveedor.contacto" maxlength="100" />
+              <span>Persona de contacto (opcional)</span>
+              <input v-model="fProveedor.contacto" maxlength="100" placeholder="Ej. Karla Pineda" @input="fProveedor.contacto = soloLetras(fProveedor.contacto)" />
             </label>
             <label class="campo">
               <span>Correo (opcional)</span>
@@ -573,7 +640,7 @@ class="btn enlace" :class="{ peligro: c.activo }"
         <template v-else-if="editando.tipo === 'bodegas'">
           <label class="campo">
             <span>Nombre</span>
-            <input v-model="fBodega.nombre" maxlength="50" />
+            <input v-model="fBodega.nombre" maxlength="50" placeholder="Ej. Zona 10" @input="fBodega.nombre = soloLetrasNumeros(fBodega.nombre)" />
           </label>
           <label class="campo">
             <span>Ubicación (opcional)</span>
@@ -584,7 +651,7 @@ class="btn enlace" :class="{ peligro: c.activo }"
         <template v-else-if="editando.tipo === 'categorias'">
           <label class="campo">
             <span>Nombre</span>
-            <input v-model="fCategoria.nombre" maxlength="50" />
+            <input v-model="fCategoria.nombre" maxlength="50" placeholder="Ej. Memorias RAM" @input="fCategoria.nombre = soloLetrasNumeros(fCategoria.nombre)" />
           </label>
           <label class="campo">
             <span>Descripción (opcional)</span>
@@ -595,7 +662,7 @@ class="btn enlace" :class="{ peligro: c.activo }"
         <template v-else>
           <label class="campo">
             <span>Nombre</span>
-            <input v-model="fTipo.nombre" maxlength="50" placeholder="Ej. Consola de videojuegos" />
+            <input v-model="fTipo.nombre" maxlength="50" placeholder="Ej. Consola de videojuegos" @input="fTipo.nombre = soloLetras(fTipo.nombre)" />
           </label>
         </template>
 
@@ -687,7 +754,7 @@ h2 { margin: 0; font: 700 22px/1.2 Georgia, serif; color: var(--c-title); }
 .campo.grande { flex: 1; min-width: 240px; }
 input, select { font: inherit; font-size: 15px; padding: 9px 10px; border: 1px solid var(--c-input); border-radius: 4px;
   background: var(--c-surface); color: var(--c-text); box-sizing: border-box; width: 100%; }
-input:disabled { background: var(--c-disabled); }
+input:disabled, input:read-only { background: var(--c-disabled); }
 input.corto { width: 90px; text-align: right; }
 input:focus-visible, select:focus-visible, .btn:focus-visible { outline: 3px solid #c8962e; outline-offset: 1px; }
 
@@ -722,6 +789,20 @@ tbody tr:nth-child(even) { background: var(--c-row); }
 .modal .error { margin: 0; }
 .nota { margin: 0; color: var(--c-muted); font-size: 14px; }
 .nota.pie { margin-top: 10px; }
+
+/* Semáforo del código: rojo = no válido o ya existe, amarillo = incompleto, verde = disponible */
+.semaforo { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.semaforo::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: currentColor; flex: none; }
+.semaforo.rojo { color: #c0392b; }
+.semaforo.amarillo { color: #b7791f; }
+.semaforo.verde { color: #1d8a4a; }
+.semaforo.gris { color: var(--c-muted); }
+:root.dark .semaforo.rojo { color: #f87171; }
+:root.dark .semaforo.amarillo { color: #fbbf24; }
+:root.dark .semaforo.verde { color: #4ade80; }
+input.borde-rojo { border-color: #c0392b; }
+input.borde-amarillo { border-color: #d69e2e; }
+input.borde-verde { border-color: #1d8a4a; }
 
 .modal { border: none; border-radius: 6px; padding: 28px; width: min(600px, 92vw);
   box-shadow: 0 20px 50px rgba(15, 42, 74, 0.35); }

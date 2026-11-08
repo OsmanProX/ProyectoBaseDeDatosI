@@ -38,6 +38,15 @@ export interface Proveedor {
   nombre: string
 }
 
+export interface CatalogoProveedor {
+  repuestoId: number
+  codigo: string
+  nombre: string
+  categoria: string
+  codigoProveedor: string | null
+  precioReferencia: number
+}
+
 export interface RepuestoCatalogo {
   repuestoId: number
   codigo: string
@@ -138,6 +147,16 @@ export const inventarioApi = {
   },
   movimientos(bodegaId?: number, tipo?: string) {
     return request<Movimiento[]>(`/api/inventario/movimientos${query({ bodegaId, tipo })}`)
+  },
+  /** Catálogo del proveedor: repuestos que vende (ProveedorRepuesto, script 17) */
+  catalogoProveedor(proveedorId: number) {
+    return request<CatalogoProveedor[]>(`/api/inventario/proveedores/${proveedorId}/catalogo`)
+  },
+  guardarCatalogo(proveedorId: number, catalogo: { repuestoId: number; precioReferencia: number | null }[]) {
+    return request<CatalogoProveedor[]>(`/api/inventario/proveedores/${proveedorId}/catalogo`, {
+      method: 'PUT',
+      body: JSON.stringify({ catalogo }),
+    })
   },
   registrarCompra(c: NuevaCompra) {
     return request<{ compraId: number; numeroCompra: string; totalCompra: number }>('/api/inventario/compras', {

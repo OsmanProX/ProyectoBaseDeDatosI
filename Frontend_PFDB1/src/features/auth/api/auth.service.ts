@@ -32,8 +32,9 @@ export const authService = {
     } catch (error) {
       // El login responde HTTP 401 con el mensaje en el cuerpo
       if (axios.isAxiosError(error) && error.response?.data) {
-        const cuerpo = error.response.data as { mensaje?: string }
-        if (cuerpo.mensaje) throw new Error(cuerpo.mensaje)
+        const cuerpo = error.response.data as { mensaje?: string; segundos?: number }
+        // 429: demasiados intentos; "segundos" dice cuánto falta para poder intentar de nuevo
+        if (cuerpo.mensaje) throw Object.assign(new Error(cuerpo.mensaje), { segundos: cuerpo.segundos ?? 0 })
       }
       throw error
     }

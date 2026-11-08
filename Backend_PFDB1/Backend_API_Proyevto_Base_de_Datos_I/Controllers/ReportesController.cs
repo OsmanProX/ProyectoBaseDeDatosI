@@ -44,7 +44,8 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             }
         }
 
-        // GET: api/reportes/dashboard  (pantalla de inicio, cualquier usuario con sesión)
+        // GET: api/reportes/dashboard  (pantalla de inicio de los empleados; el rol CLIENTE no tiene acceso)
+        [Authorize(Policy = "VerOrdenes")]
         [HttpGet("dashboard")]
         public async Task<IActionResult> Dashboard()
         {

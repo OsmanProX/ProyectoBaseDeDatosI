@@ -37,6 +37,34 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             return dto;
         }
 
+        // GET: api/inventario/proveedores/5/catalogo  (repuestos que vende el proveedor)
+        [HttpGet("proveedores/{id:int}/catalogo")]
+        public async Task<IActionResult> Catalogo(int id)
+        {
+            try
+            {
+                var dto = new CatalogoDTO();
+                dto.SetConexion(_dbConnectionFactory);
+                return Responder(await dto.Listar(id));
+            }
+            catch (Exception ex) { return StatusCode(500, new { codigo = 500, mensaje = "Catalogo(): " + ex.Message }); }
+        }
+
+        // PUT: api/inventario/proveedores/5/catalogo  { catalogo: [{ repuestoId, precioReferencia, codigoProveedor }] }
+        [HttpPut("proveedores/{id:int}/catalogo")]
+        public async Task<IActionResult> GuardarCatalogo(int id, [FromBody] GuardarCatalogoRequest request)
+        {
+            try
+            {
+                var usuarioId = UsuarioIdToken();
+                if (usuarioId is null) return StatusCode(401, new { codigo = 401, mensaje = "Token sin usuario." });
+                var dto = new CatalogoDTO();
+                dto.SetConexion(_dbConnectionFactory);
+                return Responder(await dto.Guardar(usuarioId.Value, id, request.Catalogo));
+            }
+            catch (Exception ex) { return StatusCode(500, new { codigo = 500, mensaje = "GuardarCatalogo(): " + ex.Message }); }
+        }
+
         // GET: api/inventario/stock?bodegaId=1&soloBajo=true  (vw_InventarioActual)
         [HttpGet("stock")]
         public async Task<IActionResult> ConsultarStock([FromQuery] int? bodegaId, [FromQuery] bool soloBajo = false)

@@ -23,6 +23,12 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isAuthenticated = computed(() => !!token.value)
   const rol = computed(() => (usuario.value?.roles ?? '').toUpperCase())
+  /** Lista de roles del usuario ("RECEPCION, CAJA" → ['RECEPCION', 'CAJA']) */
+  const roles = computed(() => rol.value.split(',').map((r) => r.trim()).filter(Boolean))
+  /** true si el usuario tiene AL MENOS uno de los roles indicados (los accesos se suman) */
+  function tieneRol(...lista: string[]) {
+    return lista.some((r) => roles.value.includes(r))
+  }
   const nombreCompleto = computed(() => usuario.value?.nombreCompleto ?? '')
 
   function tienePermiso(codigo: string): boolean {
@@ -52,5 +58,19 @@ export const useAuthStore = defineStore('auth', () => {
     sessionStorage.removeItem(PERMISOS_KEY)
   }
 
-  return { token, usuario, permisos, isAuthenticated, rol, nombreCompleto, tienePermiso, login, logout }
+  /** Después de cambiar la contraseña temporal: quita la marca de la sesión */
+  function contrasenaCambiada() {
+    if (!usuario.value) return
+    usuario.value = { ...usuario.value, debeCambiarContrasena: false }
+    sessionStorage.setItem(USER_KEY, JSON.stringify(usuario.value))
+  }
+
+  /** Después de editar "Mi cuenta": actualiza el nombre que se muestra arriba */
+  function actualizarNombre(nombre: string) {
+    if (!usuario.value) return
+    usuario.value = { ...usuario.value, nombreCompleto: nombre }
+    sessionStorage.setItem(USER_KEY, JSON.stringify(usuario.value))
+  }
+
+  return { token, usuario, permisos, isAuthenticated, rol, roles, tieneRol, nombreCompleto, tienePermiso, login, logout, contrasenaCambiada, actualizarNombre }
 })

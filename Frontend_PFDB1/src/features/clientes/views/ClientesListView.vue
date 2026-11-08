@@ -7,10 +7,11 @@ import {
   clientesApi,
   type Cliente, type ClienteForm, type EstadoCliente,
 } from '../api/clientes'
+import InfoTip from '@/shared/components/InfoTip.vue'
 
 const auth = useAuthStore()
 // Mismos roles que la policy del backend (Program.cs)
-const puedeEditar = computed(() => ['ADMINISTRADOR', 'RECEPCION'].includes(auth.rol))
+const puedeEditar = computed(() => auth.tieneRol('ADMINISTRADOR', 'RECEPCION'))
 
 // ---------- listado ----------
 const clientes = ref<Cliente[]>([])
@@ -38,9 +39,9 @@ watch(buscar, () => { clearTimeout(timer); timer = setTimeout(cargar, 300) })
 watch(filtroEstado, cargar)
 onMounted(cargar)
 
-function mostrarAviso(texto: string) {
+function mostrarAviso(texto: string, ms = 3500) {
   aviso.value = texto
-  setTimeout(() => (aviso.value = ''), 3500)
+  setTimeout(() => (aviso.value = ''), ms)
 }
 
 // ---------- formulario (crear / editar) ----------
@@ -80,13 +81,15 @@ function abrirEditar(c: Cliente) {
 // Validacion en la interfaz (el backend vuelve a validar)
 function validar(): boolean {
   limpiarErrores()
-  if (!form.nombreRazonSocial.trim()) errores.nombreRazonSocial = 'Escriba el nombre o la razón social.'
+  if (form.nombreRazonSocial.trim().length < 3) errores.nombreRazonSocial = 'Escriba el nombre o la razón social (mínimo 3 caracteres).'
   if (!form.nit.trim()) errores.nit = 'Escriba el NIT.'
   else if (!/^(CF|[0-9]{1,13}-?[0-9Kk])$/i.test(form.nit.trim()))
     errores.nit = 'NIT inválido. Ejemplo: 1234567-8, o CF si es consumidor final.'
-  if (!form.telefono.trim()) errores.telefono = 'Escriba un teléfono.'
-  if (form.correo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim()))
+  if (!/^\d{8}$/.test(form.telefono.trim())) errores.telefono = 'El teléfono debe tener 8 dígitos.'
+  if (!form.correo.trim()) errores.correo = 'Escriba el correo.'
+  else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.correo.trim()))
     errores.correo = 'Correo inválido.'
+  if (!form.direccion.trim()) errores.direccion = 'Escriba la dirección.'
   return Object.keys(errores).length === 0
 }
 
@@ -95,8 +98,8 @@ async function guardar() {
   guardando.value = true
   try {
     if (editandoId.value === null) {
-      await clientesApi.crear({ ...form })
-      mostrarAviso('Cliente registrado.')
+      const r = await clientesApi.crear({ ...form })
+      mostrarAviso(r?.acceso ? `Cliente registrado. ${r.acceso}` : 'Cliente registrado.', r?.acceso ? 10000 : 3500)
     } else {
       await clientesApi.editar(editandoId.value, { ...form })
       mostrarAviso('Cambios guardados.')
@@ -240,31 +243,32 @@ async function activar(c: Cliente) {
 
         <label class="campo">
           <span>{{ form.tipoCliente === 'EMPRESARIAL' ? 'Razón social' : 'Nombre completo' }}</span>
-          <input v-model="form.nombreRazonSocial" maxlength="150" :aria-invalid="!!errores.nombreRazonSocial" />
+          <input v-model="form.nombreRazonSocial" maxlength="150" :aria-invalid="!!errores.nombreRazonSocial" @input="form.nombreRazonSocial = form.nombreRazonSocial.replace(/[^\p{L}\p{N} .,&-]/gu, '')" />
           <small v-if="errores.nombreRazonSocial">{{ errores.nombreRazonSocial }}</small>
         </label>
 
         <div class="fila">
           <label class="campo">
             <span>NIT</span>
-            <input v-model="form.nit" maxlength="15" placeholder="1234567-8 o CF" :aria-invalid="!!errores.nit" />
+            <input v-model="form.nit" maxlength="15" placeholder="1234567-8 o CF" :aria-invalid="!!errores.nit" @input="form.nit = form.nit.toUpperCase().replace(/[^\dKCF-]/g, '')" />
             <small v-if="errores.nit">{{ errores.nit }}</small>
           </label>
           <label class="campo">
             <span>Teléfono</span>
-            <input v-model="form.telefono" maxlength="15" :aria-invalid="!!errores.telefono" />
+            <input v-model="form.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" :aria-invalid="!!errores.telefono" @input="form.telefono = form.telefono.replace(/\D/g, '').slice(0, 8)" />
             <small v-if="errores.telefono">{{ errores.telefono }}</small>
           </label>
         </div>
 
         <label class="campo">
-          <span>Correo (opcional)</span>
+          <span>Correo <InfoTip texto="Al registrar un cliente nuevo, el sistema le crea una cuenta (rol CLIENTE) con este correo y le envía por Gmail una contraseña y un PDF de bienvenida. Al entrar por primera vez debe cambiar la contraseña. Con su cuenta solo ve 'Mis órdenes'." /></span>
           <input v-model="form.correo" type="email" maxlength="100" :aria-invalid="!!errores.correo" />
+          <small v-if="editandoId === null" class="nota-cuenta">Se le creará su cuenta y recibirá un correo de bienvenida.</small>
           <small v-if="errores.correo">{{ errores.correo }}</small>
         </label>
 
         <label class="campo">
-          <span>Dirección (opcional)</span>
+          <span>Dirección</span>
           <input v-model="form.direccion" maxlength="200" :aria-invalid="!!errores.direccion" />
           <small v-if="errores.direccion">{{ errores.direccion }}</small>
         </label>
@@ -369,4 +373,5 @@ tr.inactivo td { color: var(--c-muted); }
 .botones { display: flex; justify-content: flex-end; gap: 10px; margin-top: 6px; }
 
 @media (max-width: 600px) { .fila { grid-template-columns: 1fr; } .cabecera { flex-direction: column; align-items: stretch; } }
+.campo small.nota-cuenta { font-size: 12px; color: #2e8b57; }
 </style>

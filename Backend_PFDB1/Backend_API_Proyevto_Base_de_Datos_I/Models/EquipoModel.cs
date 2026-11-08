@@ -22,6 +22,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
         public string Marca { get; set; } = string.Empty;
         public string Modelo { get; set; } = string.Empty;
         public string NumeroSerie { get; set; } = string.Empty;
+        public string? OrdenAbierta { get; set; }   // si tiene una orden sin cerrar, no admite otra
     }
 
     public class TipoEquipoModel

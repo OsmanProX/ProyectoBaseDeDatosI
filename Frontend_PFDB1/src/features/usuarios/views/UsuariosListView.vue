@@ -3,9 +3,10 @@
 // activar/inactivar y restablecer contraseña. Las reglas las valida la base (script 12):
 // usuario y correo únicos, contraseña de 8+ caracteres (se guarda en hash) y
 // que siempre quede un ADMINISTRADOR activo.
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { usuariosApi, type Rol, type UsuarioFila } from '../api/usuarios'
+import InfoTip from '@/shared/components/InfoTip.vue'
 
 const auth = useAuthStore()
 
@@ -56,12 +57,28 @@ const visibles = computed(() => {
 // ---------- crear / editar ----------
 const dlgForm = ref<HTMLDialogElement | null>(null)
 const editandoId = ref<number | null>(null)
-const form = reactive({ nombreUsuario: '', nombreCompleto: '', correo: '', telefono: '', contrasena: '', confirmar: '', rolId: 0 })
+const form = reactive({ nombreUsuario: '', nombreCompleto: '', correo: '', telefono: '', contrasena: '', confirmar: '', rolIds: [] as number[] })
 const errorForm = ref('')
 const guardando = ref(false)
 
+// ADMINISTRADOR ya tiene todos los permisos: si se marca, los demás roles no hacen falta.
+// En su propia cuenta, el administrador no puede quitarse ese rol (perdería el acceso).
+const rolAdminId = computed(() => roles.value.find((r) => r.nombre === 'ADMINISTRADOR')?.rolId ?? -1)
+const esMiCuenta = computed(() => editandoId.value !== null && editandoId.value === (auth.usuario?.usuarioId ?? 0))
+const esAdminMarcado = computed(() => form.rolIds.includes(rolAdminId.value))
+function rolBloqueado(rolId: number) {
+  if (rolId === rolAdminId.value) return esMiCuenta.value && esAdminMarcado.value
+  return esAdminMarcado.value
+}
+watch(esAdminMarcado, (admin) => { if (admin) form.rolIds = [rolAdminId.value] })
+
+// Roles que no se muestran como casilla (CLIENTE): se conservan al guardar
+const rolesOcultos = ref<number[]>([])
+
 function abrir(u?: UsuarioFila) {
   editandoId.value = u?.usuarioId ?? null
+  const ids = (u?.rolIds ?? '').split(',').filter(Boolean).map(Number)
+  rolesOcultos.value = ids.filter((id) => !roles.value.some((r) => r.rolId === id))
   Object.assign(form, {
     nombreUsuario: u?.nombreUsuario ?? '',
     nombreCompleto: u?.nombreCompleto ?? '',
@@ -69,7 +86,7 @@ function abrir(u?: UsuarioFila) {
     telefono: u?.telefono ?? '',
     contrasena: '',
     confirmar: '',
-    rolId: Number(u?.rolIds?.split(',')[0] ?? 0),
+    rolIds: ids.filter((id) => roles.value.some((r) => r.rolId === id)),
   })
   errorForm.value = ''
   dlgForm.value?.showModal()
@@ -77,17 +94,18 @@ function abrir(u?: UsuarioFila) {
 
 const RX_USUARIO = /^[a-z0-9._]{3,30}$/
 const RX_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const RX_TEL = /^[0-9 +-]{8,15}$/
+const RX_TEL = /^\d{8}$/
 
 function validar(): string {
   if (!RX_USUARIO.test(form.nombreUsuario.trim().toLowerCase()))
     return 'Usuario: de 3 a 30 caracteres, solo letras minúsculas, números, punto o guion bajo.'
-  if (!form.nombreCompleto.trim()) return 'El nombre completo es obligatorio.'
+  if (!/^[\p{L} ]{3,}$/u.test(form.nombreCompleto.trim())) return 'El nombre completo es obligatorio (solo letras, mínimo 3).'
   if (!RX_CORREO.test(form.correo.trim())) return 'Correo inválido.'
-  if (form.telefono.trim() && !RX_TEL.test(form.telefono.trim())) return 'Teléfono inválido (8 a 15 dígitos).'
-  if (!form.rolId) return 'Seleccione el rol.'
+  if (form.telefono.trim() && !RX_TEL.test(form.telefono.trim())) return 'El teléfono debe tener 8 dígitos.'
+  if (!form.rolIds.length && !rolesOcultos.value.length) return 'Seleccione al menos un rol.'
   if (!editandoId.value) {
     if (form.contrasena.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
+    if (!/\p{L}/u.test(form.contrasena) || !/\d/.test(form.contrasena)) return 'La contraseña debe tener al menos una letra y un número.'
     if (form.contrasena !== form.confirmar) return 'Las contraseñas no coinciden.'
   }
   return ''
@@ -100,6 +118,7 @@ async function guardar() {
   try {
     await usuariosApi.guardar(editandoId.value, {
       ...form,
+      rolIds: [...form.rolIds, ...rolesOcultos.value],
       nombreUsuario: form.nombreUsuario.trim().toLowerCase(),
     })
     dlgForm.value?.close()
@@ -157,6 +176,8 @@ function pedirClave(u: UsuarioFila) {
 async function guardarClave() {
   if (!elegido.value) return
   if (clave.nueva.length < 8) return void (errorClave.value = 'La contraseña debe tener al menos 8 caracteres.')
+  if (!/\p{L}/u.test(clave.nueva) || !/\d/.test(clave.nueva))
+    return void (errorClave.value = 'La contraseña debe tener al menos una letra y un número.')
   if (clave.nueva !== clave.confirmar) return void (errorClave.value = 'Las contraseñas no coinciden.')
   procesando.value = true
   errorClave.value = ''
@@ -242,15 +263,24 @@ async function guardarClave() {
             <span>Usuario</span>
             <input v-model="form.nombreUsuario" maxlength="30" autocomplete="off" placeholder="tecnico5" />
           </label>
-          <label class="campo">
-            <span>Rol</span>
-            <select v-model.number="form.rolId">
-              <option :value="0" disabled>Seleccione…</option>
-              <option v-for="r in roles" :key="r.rolId" :value="r.rolId">{{ r.nombre }}</option>
-            </select>
-          </label>
+          <fieldset class="campo roles">
+            <legend>Roles (puede elegir varios)
+              <InfoTip derecha texto="Aquí solo aparecen los roles de empleados. El rol CLIENTE no se muestra porque es solo para clientes: se asigna automáticamente al crear la cuenta del cliente, ya sea desde Recepción o Administrador (pantalla Clientes → Nuevo cliente) o cuando el cliente se registra solo con Crear cuenta en el login. Al guardar aquí, ese rol se conserva." />
+            </legend>
+            <label v-for="r in roles" :key="r.rolId" class="rol-op">
+              <input v-model="form.rolIds" type="checkbox" :value="r.rolId" :disabled="rolBloqueado(r.rolId)" />
+              {{ r.nombre }}
+            </label>
+          </fieldset>
         </div>
-        <p v-if="form.rolId" class="nota">{{ roles.find((r) => r.rolId === form.rolId)?.descripcion }}</p>
+        <p v-if="esMiCuenta && esAdminMarcado" class="nota">Es su propia cuenta: no puede quitarse el rol ADMINISTRADOR.</p>
+        <p v-else-if="esAdminMarcado" class="nota">ADMINISTRADOR ya tiene acceso a todo; no hace falta marcar otros roles.</p>
+        <p v-if="rolesOcultos.length" class="nota">
+          Esta cuenta es de un <b>cliente</b> (rol CLIENTE). Ese rol se conserva al guardar; no marque roles de empleado.
+        </p>
+        <p v-if="form.rolIds.length" class="nota">
+          {{ roles.filter((r) => form.rolIds.includes(r.rolId)).map((r) => r.descripcion).filter(Boolean).join(' · ') }}
+        </p>
         <div class="fila">
           <label class="campo">
             <span>Correo (para iniciar sesión)</span>
@@ -258,7 +288,7 @@ async function guardarClave() {
           </label>
           <label class="campo">
             <span>Teléfono (opcional)</span>
-            <input v-model="form.telefono" maxlength="15" inputmode="tel" />
+            <input v-model="form.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" @input="form.telefono = form.telefono.replace(/\D/g, '').slice(0, 8)" />
           </label>
         </div>
         <div v-if="!editandoId" class="fila">
@@ -271,7 +301,7 @@ async function guardarClave() {
             <input v-model="form.confirmar" type="password" autocomplete="new-password" />
           </label>
         </div>
-        <p v-if="!editandoId" class="nota">Mínimo 8 caracteres. Se guarda cifrada (hash), nunca en texto plano.</p>
+        <p v-if="!editandoId" class="nota">Mínimo 8 caracteres, con al menos una letra y un número. Se guarda cifrada (hash), nunca en texto plano.</p>
         <p v-if="errorForm" class="error" role="alert">{{ errorForm }}</p>
         <div class="botones">
           <button type="button" class="btn" @click="dlgForm?.close()">Cancelar</button>
@@ -311,7 +341,7 @@ async function guardarClave() {
             <input v-model="clave.confirmar" type="password" autocomplete="new-password" />
           </label>
         </div>
-        <p class="nota">Mínimo 8 caracteres.</p>
+        <p class="nota">Mínimo 8 caracteres, con al menos una letra y un número.</p>
         <p v-if="errorClave" class="error" role="alert">{{ errorClave }}</p>
         <div class="botones">
           <button type="button" class="btn" @click="dlgClave?.close()">Cancelar</button>
@@ -361,6 +391,10 @@ tbody tr:nth-child(even) { background: var(--c-row); }
 .chip.ok { background: #dff3e4; color: #1d6b34; }
 .chip.inactivo { background: #ececec; color: #3c4450; }
 .chip.rol { background: #e6f0fb; color: #1d4f8a; }
+.roles { border: 1px solid var(--c-input); border-radius: 4px; padding: 6px 10px 8px; margin: 0; }
+.roles legend { font-size: 13px; padding: 0 4px; }
+.rol-op { display: inline-flex; align-items: center; gap: 6px; margin-right: 14px; font-size: 14px; }
+.rol-op input { padding: 0; width: auto; }
 
 .btn { font: inherit; font-size: 15px; padding: 9px 16px; border-radius: 4px; border: 1px solid var(--c-input);
   background: var(--c-surface); color: var(--c-title); cursor: pointer; }

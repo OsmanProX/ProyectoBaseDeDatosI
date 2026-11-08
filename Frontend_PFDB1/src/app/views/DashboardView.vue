@@ -24,7 +24,6 @@ const saludo = computed(() => {
 
 // Accesos según el rol (mismos roles y mismo orden que el menú)
 const accesos = computed(() => {
-  const r = auth.rol
   const lista = [
     { a: '/clientes', t: 'Clientes', d: 'Registrar clientes y sus datos de contacto', roles: ['ADMINISTRADOR', 'RECEPCION'] },
     { a: '/equipos', t: 'Equipos', d: 'Equipos de cada cliente y su número de serie', roles: ['ADMINISTRADOR', 'RECEPCION'] },
@@ -36,7 +35,7 @@ const accesos = computed(() => {
     { a: '/mantenimientos', t: 'Mantenimientos', d: 'Repuestos, proveedores, bodegas y catálogos', roles: ['ADMINISTRADOR', 'BODEGA'] },
     { a: '/usuarios', t: 'Usuarios', d: 'Empleados, roles y contraseñas', roles: ['ADMINISTRADOR'] },
   ]
-  return lista.filter((x) => x.roles.includes(r))
+  return lista.filter((x) => auth.tieneRol(...x.roles))
 })
 
 onMounted(async () => {

@@ -6,8 +6,11 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   inventarioApi,
   type Stock, type Bodega, type Proveedor, type RepuestoCatalogo,
-  type Compra, type DetalleCompra, type Movimiento, type EstadoCompra,
+  type Compra, type DetalleCompra, type Movimiento, type EstadoCompra, type CatalogoProveedor,
 } from '../api/inventario'
+import { mantenimientoApi } from '../../mantenimientos/api/mantenimientos'
+import BuscadorSelect from '../components/BuscadorSelect.vue'
+import InfoTip from '@/shared/components/InfoTip.vue'
 
 const moneda = (n: number | null | undefined) =>
   (n ?? 0).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' })
@@ -47,9 +50,13 @@ async function cargarStock() {
   }
 }
 
+const ordenStock = ref<'asc' | 'desc'>('asc')
 const stockVisible = computed(() => {
   const t = fStock.buscar.trim().toLowerCase()
-  return stock.value.filter((s) => !t || [s.codigo, s.repuesto, s.categoria].some((v) => v.toLowerCase().includes(t)))
+  const dir = ordenStock.value === 'desc' ? -1 : 1
+  return stock.value
+    .filter((s) => !t || [s.codigo, s.repuesto, s.categoria].some((v) => v.toLowerCase().includes(t)))
+    .sort((a, b) => dir * (a.codigo.localeCompare(b.codigo, 'es', { numeric: true }) || a.bodega.localeCompare(b.bodega, 'es')))
 })
 const valorTotal = computed(() => stockVisible.value.reduce((s, x) => s + x.valorInventario, 0))
 const bajoMinimo = computed(() => stockVisible.value.filter((x) => x.estadoStock !== 'OK').length)
@@ -147,6 +154,39 @@ const nueva = reactive({
   lineas: [] as { repuestoId: number; cantidad: number; costoUnitario: number }[],
 })
 
+// Opciones para los selectores con búsqueda
+const opcProveedores = computed(() =>
+  proveedores.value.map((p) => ({ id: p.proveedorId, texto: `${p.nombre} — NIT ${p.nit}` })))
+// Solo los repuestos que vende el proveedor elegido (su catálogo), ordenados por código
+const catalogoCompra = ref<CatalogoProveedor[]>([])
+const cargandoCatalogo = ref(false)
+const opcRepuestos = computed(() =>
+  catalogoCompra.value.map((r) => ({ id: r.repuestoId, texto: `${r.codigo} · ${r.nombre}` })))
+
+// Al cambiar de proveedor se carga su catálogo y se limpian las líneas
+async function cargarCatalogoCompra(proveedorId: number) {
+  catalogoCompra.value = []
+  if (!proveedorId) return
+  cargandoCatalogo.value = true
+  try {
+    catalogoCompra.value = await inventarioApi.catalogoProveedor(proveedorId)
+  } catch (e) {
+    errorForm.value = (e as Error).message
+  } finally {
+    cargandoCatalogo.value = false
+  }
+}
+watch(() => nueva.proveedorId, (id) => {
+  nueva.lineas = [{ repuestoId: 0, cantidad: 1, costoUnitario: 0 }]
+  cargarCatalogoCompra(id)
+})
+
+// En cada línea no aparecen los repuestos ya elegidos en otras líneas
+function opcionesLinea(i: number) {
+  const usados = new Set(nueva.lineas.filter((_, j) => j !== i).map((l) => l.repuestoId))
+  return opcRepuestos.value.filter((o) => !usados.has(o.id))
+}
+
 function abrirNueva() {
   Object.assign(nueva, { proveedorId: 0, bodegaId: bodegas.value[0]?.bodegaId ?? 0, observaciones: '', lineas: [] })
   agregarLinea()
@@ -158,11 +198,93 @@ function agregarLinea() {
   nueva.lineas.push({ repuestoId: 0, cantidad: 1, costoUnitario: 0 })
 }
 
-// Al elegir el repuesto se propone su precio de compra de referencia
+// Al elegir el repuesto se usa el precio de referencia de ese proveedor
 function elegirRepuesto(i: number) {
   const linea = nueva.lineas[i]
-  const r = catalogo.value.find((x) => x.repuestoId === linea?.repuestoId)
-  if (linea && r) linea.costoUnitario = r.precioCompraReferencia
+  const r = catalogoCompra.value.find((x) => x.repuestoId === linea?.repuestoId)
+  if (linea && r) linea.costoUnitario = r.precioReferencia
+}
+
+// ---------- Proveedores y catálogo (aparte de la compra) ----------
+// Nuevo proveedor con su catálogo, o editar el catálogo de uno existente (ProveedorRepuesto)
+const dlgProv = ref<HTMLDialogElement>()
+const provSel = ref(0) // 0 = proveedor nuevo
+const nuevoProv = reactive({ nit: '', nombre: '', telefono: '', contacto: '', correo: '', direccion: '', error: '', guardando: false })
+const catSel = reactive<Record<number, { marcado: boolean; precio: number }>>({})
+const buscarCat = ref('')
+
+const soloNumeros = (v: string, max: number) => v.replace(/\D/g, '').slice(0, max)
+const soloLetras = (v: string) => v.replace(/[^\p{L} ]/gu, '')
+const soloNit = (v: string) => v.toUpperCase().replace(/[^\dK-]/g, '').slice(0, 15)
+const norm = (v: string) => v.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase()
+
+const repuestosOrdenados = computed(() =>
+  [...catalogo.value].sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true })))
+const repuestosFiltrados = computed(() => {
+  const t = norm(buscarCat.value.trim())
+  return repuestosOrdenados.value.filter((r) => !t || norm(`${r.codigo} ${r.nombre} ${r.categoria}`).includes(t))
+})
+const marcados = computed(() => Object.values(catSel).filter((x) => x.marcado).length)
+
+async function prepararCatalogo(proveedorId: number) {
+  Object.keys(catSel).forEach((k) => delete catSel[Number(k)])
+  for (const r of catalogo.value) catSel[r.repuestoId] = { marcado: false, precio: r.precioCompraReferencia }
+  if (!proveedorId) return
+  try {
+    for (const it of await inventarioApi.catalogoProveedor(proveedorId))
+      catSel[it.repuestoId] = { marcado: true, precio: it.precioReferencia }
+  } catch (e) {
+    nuevoProv.error = (e as Error).message
+  }
+}
+
+function abrirProveedores(proveedorId = 0) {
+  Object.assign(nuevoProv, { nit: '', nombre: '', telefono: '', contacto: '', correo: '', direccion: '', error: '' })
+  buscarCat.value = ''
+  provSel.value = proveedorId
+  prepararCatalogo(proveedorId)
+  dlgProv.value?.showModal()
+}
+watch(provSel, (id) => { if (dlgProv.value?.open) prepararCatalogo(id) })
+
+async function guardarProveedorCatalogo() {
+  nuevoProv.error = ''
+  let proveedorId = provSel.value
+  if (!proveedorId) {
+    const nit = nuevoProv.nit.trim().toUpperCase()
+    if (!/^\d{1,13}-?[\dK]$/.test(nit)) return void (nuevoProv.error = 'NIT inválido. Ejemplo: 1234567-8 o 1234567-K.')
+    if (!nuevoProv.nombre.trim()) return void (nuevoProv.error = 'Escriba el nombre del proveedor.')
+    if (nuevoProv.telefono.length !== 8) return void (nuevoProv.error = 'El teléfono debe tener 8 números.')
+    if (nuevoProv.contacto.trim() && nuevoProv.contacto.trim().length < 3) return void (nuevoProv.error = 'El nombre del contacto debe tener al menos 3 letras.')
+    if (nuevoProv.correo.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(nuevoProv.correo.trim()))
+      return void (nuevoProv.error = 'Correo inválido.')
+  }
+  if (!marcados.value) return void (nuevoProv.error = 'Marque al menos un repuesto que vende el proveedor.')
+  if (Object.values(catSel).some((x) => x.marcado && !(Number(x.precio) >= 0)))
+    return void (nuevoProv.error = 'Los precios no pueden ser negativos.')
+  nuevoProv.guardando = true
+  try {
+    if (!proveedorId) {
+      const nit = nuevoProv.nit.trim().toUpperCase()
+      await mantenimientoApi.guardarProveedor(null, {
+        nit, nombre: nuevoProv.nombre.trim(), contacto: nuevoProv.contacto.trim(),
+        telefono: nuevoProv.telefono.trim(), correo: nuevoProv.correo.trim(), direccion: nuevoProv.direccion.trim(),
+      })
+      proveedores.value = await inventarioApi.proveedores()
+      proveedorId = proveedores.value.find((x) => x.nit.toUpperCase() === nit)?.proveedorId ?? 0
+      if (!proveedorId) throw new Error('No se encontró el proveedor recién creado.')
+    }
+    await inventarioApi.guardarCatalogo(proveedorId, Object.entries(catSel)
+      .filter(([, v]) => v.marcado)
+      .map(([id, v]) => ({ repuestoId: Number(id), precioReferencia: Number(v.precio) })))
+    dlgProv.value?.close()
+    mostrarAviso(provSel.value ? 'Catálogo del proveedor actualizado.' : 'Proveedor y catálogo registrados.')
+    if (nueva.proveedorId === proveedorId) cargarCatalogoCompra(proveedorId)
+  } catch (e) {
+    nuevoProv.error = (e as Error).message
+  } finally {
+    nuevoProv.guardando = false
+  }
 }
 
 const totalNueva = computed(() =>
@@ -258,7 +380,10 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
         <h1>Inventario y compras</h1>
         <p class="sub">Existencias por bodega, compras a proveedores y movimientos de repuestos.</p>
       </div>
-      <button class="btn primario" @click="pestana = 'compras'; abrirNueva()">Nueva compra</button>
+      <div class="acciones-cabecera">
+        <button class="btn" @click="pestana = 'compras'; abrirProveedores()">Proveedores y catálogo</button>
+        <button class="btn primario" @click="pestana = 'compras'; abrirNueva()">Nueva compra</button>
+      </div>
     </header>
 
     <p v-if="aviso" class="aviso" role="status">{{ aviso }}</p>
@@ -286,6 +411,13 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
             <option v-for="b in bodegas" :key="b.bodegaId" :value="b.bodegaId">{{ b.nombre }}</option>
           </select>
         </label>
+        <label class="campo">
+          <span>Orden por código</span>
+          <select v-model="ordenStock">
+            <option value="asc">Ascendente (REP-0001 → …)</option>
+            <option value="desc">Descendente (… → REP-0001)</option>
+          </select>
+        </label>
         <label class="check">
           <input v-model="fStock.soloBajo" type="checkbox" />
           <span>Solo bajo mínimo o sin stock</span>
@@ -293,16 +425,21 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
       </div>
 
       <div class="resumen">
-        <div><span>Valor del inventario</span><b>{{ moneda(valorTotal) }}</b></div>
-        <div :class="{ alerta: bajoMinimo > 0 }"><span>Bajo mínimo / sin stock</span><b>{{ bajoMinimo }}</b></div>
-        <div><span>Registros</span><b>{{ stockVisible.length }}</b></div>
+        <div><span>Valor del inventario <InfoTip texto="Suma del valor (existencia × precio de compra) de las filas que se muestran." /></span><b>{{ moneda(valorTotal) }}</b></div>
+        <div :class="{ alerta: bajoMinimo > 0 }"><span>Bajo mínimo / sin stock <InfoTip texto="Filas en SIN STOCK o BAJO MÍNIMO: repuestos que conviene comprar pronto." /></span><b>{{ bajoMinimo }}</b></div>
+        <div><span>Registros <InfoTip texto="Cantidad de filas: una por cada repuesto en cada bodega." derecha /></span><b>{{ stockVisible.length }}</b></div>
       </div>
 
       <p v-if="errorStock" class="error" role="alert">{{ errorStock }}</p>
       <div class="tabla-wrap">
         <table>
           <thead>
-            <tr><th>Código</th><th>Repuesto</th><th>Categoría</th><th>Bodega</th><th class="der">Existencia</th><th class="der">Mínimo</th><th>Estado</th><th class="der">Precio venta</th><th class="der">Valor</th></tr>
+            <tr><th>Código</th><th>Repuesto</th><th>Categoría</th><th>Bodega <InfoTip texto="Un mismo repuesto aparece una vez por cada bodega donde está registrado." /></th>
+              <th class="der">Existencia <InfoTip texto="Unidades que hay ahora en esa bodega. Sube al recibir una compra y baja cuando el técnico usa el repuesto." /></th>
+              <th class="der">Mínimo <InfoTip texto="Punto de reorden: si la existencia es igual o menor a este número, hay que comprar. Se define en Mantenimientos → Repuestos." /></th>
+              <th>Estado <InfoTip texto="SIN STOCK: existencia 0. BAJO MÍNIMO: existencia ≤ mínimo. OK: existencia mayor que el mínimo." /></th>
+              <th class="der">Precio venta <InfoTip texto="Lo que se le cobra al cliente al usar el repuesto en una reparación (entra en la factura)." derecha /></th>
+              <th class="der">Valor <InfoTip texto="Existencia × precio de compra. Es lo que vale el inventario de esa fila." derecha /></th></tr>
           </thead>
           <tbody>
             <tr v-if="cargandoStock"><td colspan="9" class="vacio">Cargando existencias…</td></tr>
@@ -343,7 +480,7 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
       <div class="tabla-wrap">
         <table>
           <thead>
-            <tr><th>Número</th><th>Fecha</th><th>Proveedor</th><th>Bodega</th><th class="der">Líneas</th><th class="der">Total</th><th>Estado</th><th></th></tr>
+            <tr><th>Número <InfoTip texto="Correlativo de la compra (OC-2026-0001). Lo genera sp_RegistrarCompra." /></th><th>Fecha <InfoTip texto="Cuándo se registró el pedido. Si ya se recibió, abajo aparece la fecha de recepción." /></th><th>Proveedor <InfoTip texto="A quién se le compra. Debajo: el usuario de Bodega o Administrador que registró la compra." /></th><th>Bodega <InfoTip texto="Bodega donde entrarán los repuestos al recibir la compra." /></th><th class="der">Líneas <InfoTip texto="Cuántos repuestos distintos tiene la compra (no es la cantidad de unidades)." /></th><th class="der">Total <InfoTip texto="Suma de cantidad × costo unitario de todas las líneas." /></th><th>Estado <InfoTip texto="PENDIENTE: pedida, el inventario no ha cambiado. RECIBIDA: llegó y subió la existencia (movimiento de ENTRADA). ANULADA: se canceló; solo se puede anular si está pendiente." derecha /></th><th><span class="sr-only">Acciones</span> <InfoTip texto="Detalle: ver las líneas. Recibir: sube el inventario (sp_RecibirCompra). Anular: cancela una compra pendiente con un motivo (sp_AnularCompra)." derecha /></th></tr>
           </thead>
           <tbody>
             <tr v-if="cargandoCompras"><td colspan="8" class="vacio">Cargando compras…</td></tr>
@@ -419,7 +556,7 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
       <div class="tabla-wrap">
         <table>
           <thead>
-            <tr><th>Fecha</th><th>Tipo</th><th>Repuesto</th><th>Bodega</th><th class="der">Cantidad</th><th class="der">Queda</th><th>Documento</th><th>Usuario</th></tr>
+            <tr><th>Fecha <InfoTip texto="Cuándo se movió el inventario. Cada movimiento queda guardado y no se puede borrar (trazabilidad)." /></th><th>Tipo <InfoTip texto="ENTRADA: suma existencia (compra recibida). SALIDA: resta existencia (repuesto usado en una reparación)." /></th><th>Repuesto <InfoTip texto="Repuesto que entró o salió." /></th><th>Bodega <InfoTip texto="Bodega donde cambió la existencia." /></th><th class="der">Cantidad <InfoTip texto="Unidades que entraron o salieron en ese movimiento." /></th><th class="der">Queda <InfoTip texto="Existencia que quedó en la bodega justo después del movimiento." /></th><th>Documento <InfoTip texto="De dónde viene: la compra (OC-…) si es ENTRADA o la orden de servicio (OS-…) si es SALIDA." derecha /></th><th>Usuario <InfoTip texto="Quién hizo el movimiento: Bodega al recibir o el técnico al usar el repuesto." derecha /></th></tr>
           </thead>
           <tbody>
             <tr v-if="cargandoMov"><td colspan="8" class="vacio">Cargando movimientos…</td></tr>
@@ -441,6 +578,57 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
       </div>
     </section>
 
+    <!-- Proveedores y catálogo -->
+    <dialog ref="dlgProv" class="modal ancho">
+      <form novalidate @submit.prevent="guardarProveedorCatalogo">
+        <h2>Proveedores y catálogo</h2>
+        <p class="nota">Registre un proveedor nuevo con los repuestos que vende, o edite el catálogo de uno existente.
+          Los repuestos nuevos se crean primero en Mantenimientos → Repuestos.</p>
+
+        <label class="campo">
+          <span>Proveedor</span>
+          <select v-model.number="provSel">
+            <option :value="0">➕ Nuevo proveedor</option>
+            <option v-for="p in proveedores" :key="p.proveedorId" :value="p.proveedorId">{{ p.nombre }} — NIT {{ p.nit }}</option>
+          </select>
+        </label>
+
+        <div v-if="!provSel" class="mini">
+          <p class="mini-titulo">Datos del proveedor nuevo</p>
+          <div class="mini-campos">
+            <label class="campo"><span>NIT</span><input v-model="nuevoProv.nit" maxlength="15" inputmode="numeric" placeholder="1234567-8" @input="nuevoProv.nit = soloNit(nuevoProv.nit)" /></label>
+            <label class="campo"><span>Nombre</span><input v-model="nuevoProv.nombre" maxlength="150" @input="nuevoProv.nombre = nuevoProv.nombre.replace(/[^\p{L}\p{N} .,&-]/gu, '')" /></label>
+            <label class="campo"><span>Teléfono</span><input v-model="nuevoProv.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" @input="nuevoProv.telefono = soloNumeros(nuevoProv.telefono, 8)" /></label>
+            <label class="campo"><span>Persona de contacto (opcional)</span><input v-model="nuevoProv.contacto" maxlength="100" placeholder="Ej. Karla Pineda" @input="nuevoProv.contacto = soloLetras(nuevoProv.contacto)" /></label>
+            <label class="campo"><span>Correo (opcional)</span><input v-model="nuevoProv.correo" type="email" maxlength="100" /></label>
+            <label class="campo"><span>Dirección (opcional)</span><input v-model="nuevoProv.direccion" maxlength="200" /></label>
+          </div>
+        </div>
+
+        <div class="mini">
+          <p class="mini-titulo">Catálogo: repuestos que vende ({{ marcados }} marcados)</p>
+          <input v-model="buscarCat" type="search" placeholder="Buscar por código, nombre o categoría…" />
+          <div class="cat-lista">
+            <label v-for="r in repuestosFiltrados" :key="r.repuestoId" class="cat-item">
+              <input v-if="catSel[r.repuestoId]" v-model="catSel[r.repuestoId]!.marcado" type="checkbox" />
+              <span class="cat-nombre">{{ r.codigo }} · {{ r.nombre }} <small>{{ r.categoria }}</small></span>
+              <span v-if="catSel[r.repuestoId]?.marcado" class="cat-precio">Q
+                <input v-model.number="catSel[r.repuestoId]!.precio" type="number" min="0" step="0.01" aria-label="Precio de referencia" />
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <p v-if="nuevoProv.error" class="error" role="alert">{{ nuevoProv.error }}</p>
+        <div class="botones">
+          <button type="button" class="btn" @click="dlgProv?.close()">Cancelar</button>
+          <button type="submit" class="btn primario" :disabled="nuevoProv.guardando">
+            {{ nuevoProv.guardando ? 'Guardando…' : provSel ? 'Guardar catálogo' : 'Registrar proveedor y catálogo' }}
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <!-- Nueva compra -->
     <dialog ref="dlgCompra" class="modal ancho">
       <form novalidate @submit.prevent="guardarCompra">
@@ -449,11 +637,11 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
 
         <div class="fila">
           <label class="campo">
-            <span>Proveedor</span>
-            <select v-model.number="nueva.proveedorId">
-              <option :value="0" disabled>Seleccione…</option>
-              <option v-for="p in proveedores" :key="p.proveedorId" :value="p.proveedorId">{{ p.nombre }} — NIT {{ p.nit }}</option>
-            </select>
+            <span>Proveedor
+              <InfoTip texto="Solo proveedores ya registrados. En los repuestos aparecen únicamente los que vende este proveedor (su catálogo). Si no lo vende, use otro proveedor o regístrelo en 'Proveedores y catálogo'." />
+            </span>
+            <BuscadorSelect v-model="nueva.proveedorId" :opciones="opcProveedores" etiqueta="Proveedor"
+              placeholder="Escriba nombre, NIT o seleccione…" />
           </label>
           <label class="campo">
             <span>Bodega que recibe</span>
@@ -464,19 +652,26 @@ const nombreEstadoCompra: Record<EstadoCompra, string> = {
           </label>
         </div>
 
+        <p v-if="nueva.proveedorId && !cargandoCatalogo && !catalogoCompra.length" class="nota aviso-cat">
+          Este proveedor no tiene repuestos en su catálogo.
+          <button type="button" class="btn enlace" @click="abrirProveedores(nueva.proveedorId)">Agregar a su catálogo</button>
+        </p>
+        <p v-else-if="nueva.proveedorId" class="nota">
+          {{ catalogoCompra.length }} repuesto(s) en el catálogo de este proveedor.
+          <button type="button" class="btn enlace mini-enlace" @click="abrirProveedores(nueva.proveedorId)">Editar catálogo</button>
+        </p>
+
         <div class="tabla-wrap">
           <table class="lineas">
             <thead><tr><th>Repuesto</th><th class="der">Cantidad</th><th class="der">Costo unit. (Q)</th><th class="der">Subtotal</th><th></th></tr></thead>
             <tbody>
               <tr v-for="(l, i) in nueva.lineas" :key="i">
                 <td>
-                  <select v-model.number="l.repuestoId" :aria-label="`Repuesto línea ${i + 1}`" @change="elegirRepuesto(i)">
-                    <option :value="0" disabled>Seleccione…</option>
-                    <option v-for="r in catalogo" :key="r.repuestoId" :value="r.repuestoId">{{ r.codigo }} · {{ r.nombre }}</option>
-                  </select>
+                  <BuscadorSelect v-model="l.repuestoId" :opciones="opcionesLinea(i)" :etiqueta="`Repuesto línea ${i + 1}`"
+                    placeholder="Escriba código, nombre o seleccione…" @elegir="elegirRepuesto(i)" />
                 </td>
                 <td><input v-model.number="l.cantidad" type="number" min="1" step="1" :aria-label="`Cantidad línea ${i + 1}`" /></td>
-                <td><input v-model.number="l.costoUnitario" type="number" min="0" step="0.01" :aria-label="`Costo línea ${i + 1}`" /></td>
+                <td><input :value="Number(l.costoUnitario).toFixed(2)" type="text" readonly tabindex="-1" title="Precio de compra del repuesto (se cambia en Mantenimientos)" :aria-label="`Costo línea ${i + 1}`" /></td>
                 <td class="der">{{ moneda((Number(l.cantidad) || 0) * (Number(l.costoUnitario) || 0)) }}</td>
                 <td><button type="button" class="btn enlace peligro" :disabled="nueva.lineas.length === 1" @click="nueva.lineas.splice(i, 1)">Quitar</button></td>
               </tr>
@@ -623,6 +818,16 @@ table.interna th { background: var(--c-disabled); color: var(--c-title); }
 .lineas tfoot td { border-top: 2px solid var(--c-border); }
 .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .fila .campo { min-width: 0; }
+.mini { border: 1px dashed var(--c-input, #c9d2de); border-radius: 6px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.mini .mini-titulo { margin: 0; font-weight: 600; }
+.mini-campos { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.mini-campos .campo { min-width: 0; }
+.mini-botones { display: flex; gap: 8px; justify-content: flex-end; }
+.mini-enlace { font-size: 12px; margin-left: 8px; padding: 0; }
+.mini small { font-size: 12px; }
+.modal .tabla-wrap { overflow: visible; }
+.mini small.ok { color: #2e8b57; }
+.mini small.mal { color: #d9534f; }
 .botones { display: flex; justify-content: flex-end; gap: 10px; }
 
 @media (max-width: 700px) {
@@ -632,4 +837,14 @@ table.interna th { background: var(--c-disabled); color: var(--c-title); }
   .cabecera { flex-direction: column; align-items: stretch; }
   .campo { min-width: 0; flex: 1 1 100%; }
 }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.acciones-cabecera { display: flex; gap: 8px; flex-wrap: wrap; }
+.aviso-cat { color: #b45309; }
+.cat-lista { max-height: 260px; overflow-y: auto; border: 1px solid var(--c-input, #c9d2de); border-radius: 4px; }
+.cat-item { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-bottom: 1px solid var(--c-input, #e2e8f0); font-size: 14px; cursor: pointer; }
+.cat-item > input[type='checkbox'] { width: auto; }
+.cat-nombre { flex: 1; }
+.cat-nombre small { opacity: 0.7; margin-left: 6px; }
+.cat-precio { display: inline-flex; align-items: center; gap: 4px; }
+.cat-precio input { width: 100px; padding: 4px 6px; }
 </style>

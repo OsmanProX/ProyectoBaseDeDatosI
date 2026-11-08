@@ -24,7 +24,7 @@ export interface UsuarioForm {
   correo: string
   telefono: string
   contrasena: string // solo al crear
-  rolId: number
+  rolIds: number[]
 }
 
 const json = (method: 'POST' | 'PUT', body: unknown): RequestInit => ({ method, body: JSON.stringify(body) })
@@ -39,7 +39,7 @@ export const usuariosApi = {
       correo: f.correo,
       telefono: f.telefono,
       contrasena: id ? null : f.contrasena,
-      roles: [f.rolId],
+      roles: f.rolIds,
     }
     return apiFetch<UsuarioFila>(id ? `/api/usuario/${id}` : '/api/usuario', json(id ? 'PUT' : 'POST', body))
   },

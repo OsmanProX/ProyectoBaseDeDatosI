@@ -2,6 +2,7 @@ using Backend_API_Proyevto_Base_de_Datos_I.BD;
 using Backend_API_Proyevto_Base_de_Datos_I.DTO;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
 {
@@ -15,6 +16,14 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         public OrdenController(DBContext dbConnectionFactory)
         {
             _dbConnectionFactory = dbConnectionFactory;
+        }
+
+        // El usuario que registra o cambia el estado se toma del token, no del cuerpo de la petición
+        // (así nadie puede registrar una orden a nombre de otro usuario).
+        private int? UsuarioIdToken()
+        {
+            var texto = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+            return int.TryParse(texto, out var id) ? id : null;
         }
 
         // GET: api/orden?buscar=OS-2026&estado=ABIERTAS  (sp_ListarOrdenes, script 10)
@@ -101,6 +110,9 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
                     var errores = string.Join(" | ", ModelState.Values.SelectMany(v => v.Errors).Select(e => e.ErrorMessage));
                     return StatusCode(400, new { codigo = 400, mensaje = errores });
                 }
+                var usuarioId = UsuarioIdToken();
+                if (usuarioId is null) return StatusCode(401, new { codigo = 401, mensaje = "Token sin UsuarioId válido." });
+                request.UsuarioRecepcionId = usuarioId.Value;
                 request.SetConexion(_dbConnectionFactory);
                 var respuesta = await request.Registrar();
                 return StatusCode(respuesta.codigo, new { respuesta.codigo, respuesta.mensaje, respuesta.data });
@@ -118,6 +130,9 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
         {
             try
             {
+                var usuarioId = UsuarioIdToken();
+                if (usuarioId is null) return StatusCode(401, new { codigo = 401, mensaje = "Token sin UsuarioId válido." });
+                request.UsuarioId = usuarioId.Value;
                 request.SetConexion(_dbConnectionFactory);
                 var respuesta = await request.CambiarEstado();
                 return StatusCode(respuesta.codigo, new { respuesta.codigo, respuesta.mensaje, respuesta.data });
