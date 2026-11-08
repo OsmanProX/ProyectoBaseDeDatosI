@@ -24,7 +24,8 @@ const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })
 const fecha = (iso: string | null) =>
   iso ? new Date(iso.length === 10 ? iso + 'T00:00:00' : iso).toLocaleDateString('es-GT') : '—'
-const hoy = new Date().toISOString().slice(0, 10)
+// Fecha local (toISOString usa UTC: en Guatemala, después de las 18:00 ya daría el día siguiente)
+const hoy = new Date().toLocaleDateString('en-CA')
 
 // ---------- listado ----------
 const ordenes = ref<OrdenResumen[]>([])
@@ -112,7 +113,8 @@ function validarNueva(): boolean {
   limpiarErrores()
   if (!nueva.clienteId) errores.clienteId = 'Seleccione el cliente.'
   if (!nueva.equipoId) errores.equipoId = 'Seleccione el equipo.'
-  if (!nueva.problemaReportado.trim()) errores.problemaReportado = 'Describa el problema que reporta el cliente.'
+  if (nueva.problemaReportado.trim().length < 10)
+    errores.problemaReportado = 'Describa el problema que reporta el cliente (mínimo 10 caracteres).'
   if (nueva.fechaEstimada && nueva.fechaEstimada < hoy)
     errores.fechaEstimada = 'La fecha estimada no puede ser anterior a hoy.'
   return Object.keys(errores).length === 0
@@ -156,8 +158,7 @@ const errorCambio = ref('')
 // Aquí solo: iniciar diagnóstico (Técnico/Admin) y cancelar (Recepción/Técnico/Admin, con motivo).
 const opcionesEstado = computed(() => {
   if (!actual.value) return []
-  const rol = auth.rol
-  const tecnicoOAdmin = rol.includes('TECNICO') || rol.includes('ADMINISTRADOR')
+  const tecnicoOAdmin = auth.tieneRol('TECNICO') || auth.tieneRol('ADMINISTRADOR')
   return (TRANSICIONES[actual.value.estadoId] ?? [])
     .filter((id) => id === 7 || (id === 2 && tecnicoOAdmin))
     .map((id) => ESTADOS[id - 1]!)
@@ -190,8 +191,8 @@ async function cambiarEstado() {
   if (!actual.value) return
   errorCambio.value = ''
   if (!estadoNuevoId.value) { errorCambio.value = 'Seleccione el nuevo estado.'; return }
-  if (estadoNuevoId.value === 7 && !observacion.value.trim()) {
-    errorCambio.value = 'Indique el motivo de la cancelación.'
+  if (estadoNuevoId.value === 7 && observacion.value.trim().length < 10) {
+    errorCambio.value = 'Indique el motivo de la cancelación (mínimo 10 caracteres).'
     return
   }
   cambiando.value = true

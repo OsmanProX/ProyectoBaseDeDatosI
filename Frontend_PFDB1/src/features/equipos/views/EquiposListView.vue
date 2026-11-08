@@ -99,10 +99,10 @@ function validar(): boolean {
   limpiarErrores()
   if (!form.clienteId) errores.clienteId = 'Seleccione el cliente.'
   if (!form.tipoEquipoId) errores.tipoEquipoId = 'Seleccione el tipo de equipo.'
-  if (!form.marca.trim()) errores.marca = 'Escriba la marca.'
-  if (!form.modelo.trim()) errores.modelo = 'Escriba el modelo.'
+  if (form.marca.trim().length < 2) errores.marca = 'Escriba la marca (mínimo 2 caracteres).'
+  if (form.modelo.trim().length < 2) errores.modelo = 'Escriba el modelo (mínimo 2 caracteres).'
   const serie = form.numeroSerie.trim()
-  if (!serie) errores.numeroSerie = 'Escriba el número de serie.'
+  if (serie.length < 4) errores.numeroSerie = 'Escriba el número de serie (mínimo 4 caracteres).'
   else if (!/^[A-Za-z0-9][A-Za-z0-9-]*$/.test(serie))
     errores.numeroSerie = 'Use solo letras, números y guiones, sin espacios.'
   return Object.keys(errores).length === 0
@@ -301,12 +301,12 @@ v-model="form.numeroSerie" maxlength="50" :disabled="!!editando" autocomplete="o
         <div class="fila">
           <label class="campo">
             <span>Marca</span>
-            <input v-model="form.marca" maxlength="50" :aria-invalid="!!errores.marca" />
+            <input v-model="form.marca" maxlength="50" placeholder="Ej. HP" :aria-invalid="!!errores.marca" @input="form.marca = form.marca.replace(/[^\p{L}\p{N} .&-]/gu, '')" />
             <small v-if="errores.marca">{{ errores.marca }}</small>
           </label>
           <label class="campo">
             <span>Modelo</span>
-            <input v-model="form.modelo" maxlength="50" :aria-invalid="!!errores.modelo" />
+            <input v-model="form.modelo" maxlength="50" placeholder="Ej. Pavilion 15" :aria-invalid="!!errores.modelo" @input="form.modelo = form.modelo.replace(/[^\p{L}\p{N} .\/()+-]/gu, '')" />
             <small v-if="errores.modelo">{{ errores.modelo }}</small>
           </label>
         </div>

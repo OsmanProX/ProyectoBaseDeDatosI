@@ -94,14 +94,14 @@ function abrir(u?: UsuarioFila) {
 
 const RX_USUARIO = /^[a-z0-9._]{3,30}$/
 const RX_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const RX_TEL = /^[0-9 +-]{8,15}$/
+const RX_TEL = /^\d{8}$/
 
 function validar(): string {
   if (!RX_USUARIO.test(form.nombreUsuario.trim().toLowerCase()))
     return 'Usuario: de 3 a 30 caracteres, solo letras minúsculas, números, punto o guion bajo.'
-  if (!form.nombreCompleto.trim()) return 'El nombre completo es obligatorio.'
+  if (!/^[\p{L} ]{3,}$/u.test(form.nombreCompleto.trim())) return 'El nombre completo es obligatorio (solo letras, mínimo 3).'
   if (!RX_CORREO.test(form.correo.trim())) return 'Correo inválido.'
-  if (form.telefono.trim() && !RX_TEL.test(form.telefono.trim())) return 'Teléfono inválido (8 a 15 dígitos).'
+  if (form.telefono.trim() && !RX_TEL.test(form.telefono.trim())) return 'El teléfono debe tener 8 dígitos.'
   if (!form.rolIds.length && !rolesOcultos.value.length) return 'Seleccione al menos un rol.'
   if (!editandoId.value) {
     if (form.contrasena.length < 8) return 'La contraseña debe tener al menos 8 caracteres.'
@@ -285,7 +285,7 @@ async function guardarClave() {
           </label>
           <label class="campo">
             <span>Teléfono (opcional)</span>
-            <input v-model="form.telefono" maxlength="15" inputmode="tel" />
+            <input v-model="form.telefono" maxlength="8" inputmode="numeric" placeholder="22001000" @input="form.telefono = form.telefono.replace(/\D/g, '').slice(0, 8)" />
           </label>
         </div>
         <div v-if="!editandoId" class="fila">

@@ -108,13 +108,16 @@ function cerrarSesion() {
             <RouterLink
               :to="item.path"
               :aria-label="item.name"
-              :title="collapsed ? item.name : undefined"
+              :title="collapsed ? `${item.name}: ${item.descripcion ?? ''}` : item.descripcion"
               class="mb-1 flex min-h-11 items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-muted hover:bg-primary/5 hover:text-primary"
               exact-active-class="!bg-primary/10 !font-medium !text-primary"
               @click="mobileOpen = false"
             >
               <component :is="resolveIcon(item.icon)" class="h-[18px] w-[18px] shrink-0" />
-              <span v-if="!collapsed">{{ item.name }}</span>
+              <span v-if="!collapsed" class="flex min-w-0 flex-col leading-tight">
+                <span>{{ item.name }}</span>
+                <span v-if="item.descripcion" class="text-[11px] font-normal opacity-70">{{ item.descripcion }}</span>
+              </span>
             </RouterLink>
           </template>
         </nav>
