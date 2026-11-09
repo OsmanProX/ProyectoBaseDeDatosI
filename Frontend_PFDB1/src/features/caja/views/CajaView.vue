@@ -3,6 +3,7 @@
 // Ver: ADMINISTRADOR, CAJA y RECEPCION. Facturar/cobrar: ADMINISTRADOR y CAJA. Entregar: ADMINISTRADOR y RECEPCION.
 // Las reglas (orden LISTO, IVA 12 %, no pagar de más, no entregar con saldo) las valida la base (script 06).
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import InfoTip from '@/shared/components/InfoTip.vue'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
 import { cajaApi, type OrdenCaja, type DetalleCaja, type MetodoPago } from '../api/caja'
 
@@ -133,23 +134,16 @@ const enviando = ref('')
 
 const metodoElegido = computed(() => metodos.value.find((m) => m.metodoPagoId === fPago.metodoPagoId))
 const esTarjeta = computed(() => metodoElegido.value?.nombre === 'TARJETA')
+// Al cambiar de método, el monto vuelve al saldo completo (con tarjeta no se puede abonar)
+watch(() => fPago.metodoPagoId, () => { fPago.monto = saldo.value })
 const soloDigitos = (v: string) => v.replace(/\D/g, '')
 const marcaTarjeta = computed(() => {
   const n = soloDigitos(fTarjeta.numero)
+  // Solo se aceptan VISA (empieza con 4) y MasterCard (empieza con 5); los demás dígitos son libres
   if (/^4/.test(n)) return 'VISA'
-  if (/^(5[1-5]|2[2-7])/.test(n)) return 'MASTERCARD'
-  if (/^3[47]/.test(n)) return 'AMEX'
+  if (/^5/.test(n)) return 'MASTERCARD'
   return ''
 })
-function luhnValido(n: string) {
-  let suma = 0
-  for (let i = 0; i < n.length; i++) {
-    let d = Number(n[n.length - 1 - i])
-    if (i % 2 === 1) { d *= 2; if (d > 9) d -= 9 }
-    suma += d
-  }
-  return n.length === 16 && suma % 10 === 0
-}
 function formatearNumero() {
   fTarjeta.numero = soloDigitos(fTarjeta.numero).slice(0, 16).replace(/(\d{4})(?=\d)/g, '$1 ')
 }
@@ -160,7 +154,7 @@ function formatearVence() {
 function errorTarjeta(): string {
   const n = soloDigitos(fTarjeta.numero)
   if (n.length !== 16) return 'El número de tarjeta debe tener 16 dígitos.'
-  if (!luhnValido(n)) return 'Número de tarjeta inválido.'
+  if (!marcaTarjeta.value) return 'Solo se aceptan tarjetas VISA (empiezan con 4) o MasterCard (empiezan con 5).'
   if (!fTarjeta.nombre.trim()) return 'Escriba el nombre impreso en la tarjeta.'
   if (!/^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ' ]+$/.test(fTarjeta.nombre.trim())) return 'El nombre solo puede tener letras.'
   const m = /^(\d{2})\/(\d{2})$/.exec(fTarjeta.vence)
@@ -214,10 +208,14 @@ function facturar() {
 
 function cobrar() {
   if (!factura.value) return
-  const monto = Math.round(saldo.value * 100) / 100 // el monto es siempre el saldo pendiente
+  // R12: en efectivo se puede abonar una parte; con tarjeta se cobra siempre el saldo completo.
+  // La base vuelve a validar que no pase del total.
+  const monto = esTarjeta.value ? Math.round(saldo.value * 100) / 100 : Number(fPago.monto)
   if (!fPago.metodoPagoId) return void (errores.pago = 'Seleccione el método de pago.')
-  if (!(monto > 0)) return void (errores.pago = 'El monto debe ser mayor que cero.')
-  if (monto > saldo.value) return void (errores.pago = `El monto no puede pasar del saldo (${moneda(saldo.value)}).`)
+  if (!Number.isFinite(monto) || !(monto > 0)) return void (errores.pago = 'El monto debe ser mayor que Q 0.00.')
+  if (Math.round(monto * 100) !== monto * 100) return void (errores.pago = 'El monto admite como máximo 2 decimales.')
+  if (Math.round(monto * 100) > Math.round(saldo.value * 100))
+    return void (errores.pago = `El monto no puede pasar del saldo (${moneda(saldo.value)}).`)
   let referencia: string | null = null
   if (esTarjeta.value) {
     const err = errorTarjeta()
@@ -396,8 +394,16 @@ function entregar() {
                 </select>
               </label>
               <label class="campo corto">
-                <span>Monto (Q)</span>
-                <input :value="saldo.toFixed(2)" type="text" readonly tabindex="-1" aria-label="Monto a cobrar: saldo pendiente" />
+                <span>Monto (Q) <InfoTip :texto="esTarjeta ? 'Con tarjeta se cobra siempre el saldo completo.' : 'En efectivo puede pagar todo el saldo o solo una parte (abono). La suma de los pagos nunca puede pasar del total de la factura (R12).'" /></span>
+                <input v-if="esTarjeta" :value="saldo.toFixed(2)" type="text" readonly tabindex="-1" aria-label="Monto a cobrar: saldo completo" />
+                <input v-else v-model.number="fPago.monto" type="number" min="0.01" :max="saldo" step="0.01" inputmode="decimal" aria-label="Monto a cobrar" />
+                <small v-if="esTarjeta" class="ayuda-monto">Con tarjeta se cobra el saldo completo.</small>
+                <small v-else class="ayuda-monto">
+                  <button type="button" class="enlace" @click="fPago.monto = saldo">Pagar todo ({{ moneda(saldo) }})</button>
+                  <template v-if="Number(fPago.monto) > 0 && Number(fPago.monto) < saldo">
+                    · Abono: quedará pendiente {{ moneda(Math.round((saldo - Number(fPago.monto)) * 100) / 100) }}
+                  </template>
+                </small>
               </label>
               <div v-if="esTarjeta" class="tarjeta">
                 <p class="tarjeta-titulo">Datos de la tarjeta</p>
@@ -405,7 +411,7 @@ function entregar() {
                 <label class="campo ancho">
                   <span>Número de tarjeta <small>{{ marcaTarjeta ? `· ${marcaTarjeta}` : '' }}</small></span>
                   <input v-model="fTarjeta.numero" inputmode="numeric" autocomplete="cc-number" maxlength="19"
-                    placeholder="4000 1234 5678 9010" @input="formatearNumero" />
+                    placeholder="4000 0000 0000 0000" @input="formatearNumero" />
                 </label>
                 <label class="campo ancho">
                   <span>Nombre impreso en la tarjeta</span>
@@ -450,8 +456,9 @@ function entregar() {
               </button>
             </div>
             <p v-if="errorComprobante" class="error" role="alert">{{ errorComprobante }}</p>
-            <p v-else-if="saldo > 0" class="nota">El equipo se entrega cuando la factura no tenga saldo pendiente.</p>
-            <form v-else-if="puedeEntregar" novalidate @submit.prevent="entregar">
+            <!-- Formulario de entrega: solo si todavía no se entregó -->
+            <p v-if="!detalle.entrega && saldo > 0" class="nota">El equipo se entrega cuando la factura no tenga saldo pendiente.</p>
+            <form v-else-if="!detalle.entrega && puedeEntregar" novalidate @submit.prevent="entregar">
               <div class="fila">
                 <label class="campo">
                   <span>Nombre de quien recibe</span>
@@ -469,7 +476,7 @@ function entregar() {
                 </button>
               </div>
             </form>
-            <p v-else class="nota">La entrega la registra recepción.</p>
+            <p v-else-if="!detalle.entrega" class="nota">La entrega la registra recepción.</p>
           </article>
         </template>
       </section>
@@ -592,4 +599,7 @@ tbody tr:nth-child(even) { background: var(--c-row); }
   table.resumen { min-width: 0; width: 100%; }
 }
 .comprobante { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+.ayuda-monto { display: block; margin-top: 4px; font-size: 12.5px; color: var(--c-muted); }
+.enlace { all: unset; cursor: pointer; color: var(--c-link, #2f5c94); text-decoration: underline; font-weight: 600; }
+.enlace:focus-visible { outline: 2px solid #c8962e; outline-offset: 2px; }
 </style>
