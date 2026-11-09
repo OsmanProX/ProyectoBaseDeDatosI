@@ -6,7 +6,7 @@ Guía para que todo el grupo entienda qué cambió después de la defensa y en q
 
 ## 1. Orden de trabajo
 
-1. **Base de datos (nube):** ejecutar en orden los scripts de `database/Reglas_Adicionales/`: **13, 14, 15, 16 y 17**. Todos se pueden repetir sin dañar datos. Ya están en la nube; solo hay que volver a ejecutar **14, 15 y 17** (tienen correcciones de la revisión).
+1. **Base de datos (nube):** ejecutar en orden los scripts de `database/Reglas_Adicionales/`: **13 al 18**. Todos se pueden repetir sin dañar datos. Ya están en la nube; solo hay que volver a ejecutar **14, 15 y 17** (tienen correcciones de la revisión).
 2. **Cada integrante:** hacer *pull* de la rama y configurar el correo en sus *user-secrets* (sección 4).
 3. **Probar el programa** con la lista de la sección 5 y anotar errores (pantalla, qué hizo, qué esperaba, qué pasó + captura).
 4. Corregir lo que salga y luego hacer *merge* a `rama_Combinada`.
@@ -18,9 +18,9 @@ Guía para que todo el grupo entienda qué cambió después de la defensa y en q
 | Carpeta | Contenido |
 |---|---|
 | `Reglas_Obligatorias/` | Scripts 00–12: las 27 tablas, procedimientos, triggers, funciones, vistas y reportes del enunciado (reglas **R01–R16**). `00_script_maestro.sql` los junta todos. |
-| `Reglas_Adicionales/` | Scripts 13–17: mejoras del grupo (el enunciado permite agregar reglas, no quitarlas). |
+| `Reglas_Adicionales/` | Scripts 13–18: mejoras del grupo (el enunciado permite agregar reglas, no quitarlas). |
 
-> Si se vuelve a ejecutar el **script maestro**, después hay que ejecutar otra vez del **13 al 17**.
+> Si se vuelve a ejecutar el **script maestro**, después hay que ejecutar otra vez del **13 al 18**.
 
 | Script | Qué agrega |
 |---|---|
@@ -29,6 +29,7 @@ Guía para que todo el grupo entienda qué cambió después de la defensa y en q
 | 15 | **Correo único** en Cliente (`UX_Cliente_Correo`); al editar el correo de un cliente también cambia el de su cuenta |
 | 16 | El **Técnico** puede cancelar una orden (cliente no autorizó) |
 | 17 | **Catálogo del proveedor** (`ProveedorRepuesto`): una compra solo acepta repuestos que el proveedor vende (trigger 51885) |
+| 18 | **Quitar** actividad o repuesto en Taller (el repuesto vuelve a la bodega con una ENTRADA y su motivo) y **R14 completa** (no se borra en ReparacionRepuesto, ActividadReparacion, DetalleCompra, Entrega, Diagnostico ni Reparacion). Ya ejecutado en la nube. |
 
 ---
 

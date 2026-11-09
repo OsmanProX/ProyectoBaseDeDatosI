@@ -34,7 +34,7 @@ El frontend **nunca** se conecta directo a SQL Server; todo pasa por la API.
 ├── BD/BD_Conetner_BD1/      docker-compose.yml del SQL Server local
 ├── database/                scripts SQL
 │   ├── Reglas_Obligatorias/   01–12 y 00_script_maestro: tablas, procesos y reglas R01–R16 del enunciado
-│   └── Reglas_Adicionales/    13–16: mejoras del grupo (cuentas de cliente, recuperar contraseña, correo único, técnico cancela)
+│   └── Reglas_Adicionales/    13–18: mejoras del grupo (ver tabla abajo)
 │   ├── 00_script_maestro.sql     TODO en un solo archivo (01 al 12 en orden), con índice de objetos
 │   ├── 01_tablas.sql             27 tablas con PK, FK, UNIQUE, DEFAULT y CHECK
 │   ├── 02_datos_iniciales.sql    catálogos y usuarios base
@@ -55,7 +55,20 @@ El frontend **nunca** se conecta directo a SQL Server; todo pasa por la API.
 └── README.md
 ```
 
-**Contenido final de la base:** 29 tablas · 160 restricciones · 14 índices · 20 vistas · 4 funciones · 39 procedimientos · 10 triggers.
+### Scripts adicionales (13–18)
+
+El enunciado permite agregar reglas, no quitarlas. Todos se pueden ejecutar más de una vez sin dañar datos.
+
+| Script | Qué agrega |
+|---|---|
+| `13_cuenta_cliente.sql` | Rol **CLIENTE**, `Usuario.ClienteId` (una cuenta por cliente), `sp_Cliente_CrearAcceso`, `sp_Cliente_MisOrdenes` (portal del cliente) |
+| `14_registro_recuperacion.sql` | Crear cuenta desde el login, recuperar y cambiar contraseña, Mi cuenta; login con correo o usuario |
+| `15_cliente_correo_unico.sql` | Correo único en Cliente (índice único filtrado) |
+| `16_tecnico_cancela_orden.sql` | El Técnico puede cancelar una orden (el cliente no autorizó) |
+| `17_catalogo_proveedor.sql` | Catálogo del proveedor (`ProveedorRepuesto`): una compra solo acepta repuestos que el proveedor vende |
+| `18_taller_quitar_r14.sql` | **Quitar** una actividad o devolver un repuesto a la bodega mientras la reparación está en proceso (deja una ENTRADA con el motivo) y **R14 completa**: triggers que impiden borrar en ReparacionRepuesto, ActividadReparacion, DetalleCompra, Entrega, Diagnostico y Reparacion |
+
+**Contenido final de la base (01 al 18):** 29 tablas · 45 llaves foráneas · 16 índices (sin contar PK/UQ) · 20 vistas · 4 funciones · 50 procedimientos · 17 triggers.
 
 ## Requisitos (computadora limpia)
 
@@ -75,8 +88,12 @@ cd ProyectoBaseDeDatosI
 
 ## Paso 1 – Base de datos
 
-La base se crea completa con **un solo script**: `database/Reglas_Obligatorias/00_script_maestro.sql`.
-Ese archivo junta los scripts 01 al 12 en el orden correcto (incluye los datos de prueba del 05).
+La base se crea en dos partes:
+
+1. `database/Reglas_Obligatorias/00_script_maestro.sql`: junta los scripts 01 al 12 en el orden correcto (incluye los usuarios y datos de prueba del 05).
+2. Después, **en orden**, los scripts `13` al `18` de `database/Reglas_Adicionales/`.
+
+> **Entrega en Canvas:** el archivo `Grupo_01_TechCare_Creacion.sql` (entregado aparte, no está en el repositorio) crea la **misma estructura** en una sola ejecución, con los catálogos pero **sin usuarios ni datos de prueba**. Coincide con el diagrama ER `Grupo_01_TechCare_ER.pdf`.
 
 > ⚠️ El script **borra las tablas si ya existen**. Sobre una base con datos, sacar un respaldo antes.
 
@@ -99,12 +116,15 @@ docker compose up -d
    GO
    ```
 4. Ejecutar todo (F5). Al final debe mostrar el mensaje de cada sección `>> 1/12` … `>> 12/12` sin errores.
+5. Ejecutar en orden `13` → `18` de `database/Reglas_Adicionales/` (cada uno con F5, en la base `TechCare`).
 
 ### Opción B – SQL Server en la nube (SmarterASP)
 
 1. Conectarse en SSMS al servidor de SmarterASP con el usuario de la base (los datos los tiene el grupo; **no están en el repositorio**).
 2. Seleccionar la base del proyecto en la lista de bases.
-3. Abrir `database/Reglas_Obligatorias/00_script_maestro.sql`, **dejar comentadas** las 4 líneas del `CREATE DATABASE` / `USE` y ejecutar todo.
+3. **Sacar un respaldo** desde el panel de SmarterASP.
+4. Abrir `database/Reglas_Obligatorias/00_script_maestro.sql`, **dejar comentadas** las 4 líneas del `CREATE DATABASE` / `USE` y ejecutar todo.
+5. Ejecutar en orden `13` → `18` de `database/Reglas_Adicionales/` (revisar que arriba esté seleccionada la base de la nube, no `master`).
 
 ### Verificar
 
@@ -113,7 +133,7 @@ SELECT type_desc, COUNT(*) AS Cantidad
 FROM sys.objects
 WHERE type IN ('U', 'V', 'P', 'FN', 'IF', 'TF', 'TR')
 GROUP BY type_desc;
--- Debe dar: 29 tablas, 20 vistas, 39 procedimientos y 10 triggers; las funciones (FN, IF o TF) suman 4.
+-- Con 01 al 18: 29 tablas, 20 vistas, 50 procedimientos y 17 triggers; las funciones (FN, IF o TF) suman 4.
 ```
 
 ## Paso 2 – Backend (API)
@@ -158,8 +178,9 @@ dotnet run
 ```bash
 cd Frontend_PFDB1
 cp .env.example .env   # en Windows: copy .env.example .env   (VITE_API_BASE_URL=http://localhost:5247)
-npm install       # o: bun install
-npm run dev       # o: bun run dev
+bun install       # o: npm install
+bun run dev       # o: npm run dev
+bun run type-check   # revisa los tipos de TypeScript (debe terminar sin errores)
 ```
 
 Abrir http://127.0.0.1:5173 e iniciar sesión con un usuario de prueba.
@@ -168,7 +189,7 @@ Abrir http://127.0.0.1:5173 e iniciar sesión con un usuario de prueba.
 
 ## Usuarios de prueba
 
-Contraseña de todos: `TechCare2026!` (en la base se guarda solo el hash SHA-256, nunca el texto). Se inicia sesión con el **correo**.
+Contraseña de todos: `TechCare2026!` (en la base se guarda solo el hash SHA-256, nunca el texto). Se inicia sesión con el **correo o el usuario** (script 14).
 
 | Correo | Rol | Creado por |
 |---|---|---|
@@ -182,6 +203,8 @@ Contraseña de todos: `TechCare2026!` (en la base se guarda solo el hash SHA-256
 | `bodega2@techcare.com.gt` | BODEGA | 05 |
 | `caja2@techcare.com.gt` | CAJA | 05 |
 
+**Clientes (rol CLIENTE):** no hay cuentas fijas. Se crean al registrar un cliente con correo (Clientes → Nuevo, llega un correo con la contraseña temporal) o con **Crear cuenta** en el login. Entran a **Mis órdenes**: estado de sus equipos, saldo y, cuando la orden se entrega, el comprobante en PDF (descargar o enviar a su correo).
+
 ## Problemas comunes
 
 | Mensaje | Causa | Solución |
@@ -191,6 +214,9 @@ Contraseña de todos: `TechCare2026!` (en la base se guarda solo el hash SHA-256
 | `Correo o contraseña incorrectos` | se escribió el usuario en vez del correo, o el usuario está inactivo | usar el correo completo, p. ej. `admin@techcare.com.gt` |
 | `Login failed for user…` en la consola del backend | la contraseña de la cadena de conexión es incorrecta | corregirla en los secretos de usuario |
 | `La base ya tiene órdenes o datos de prueba` al correr el 05 suelto | el 05 solo corre sobre una base recién creada | usar el `00_script_maestro.sql` completo |
+| `Ocurrió un error inesperado` después de bajar cambios | el backend sigue con la versión anterior | detener y volver a ejecutar el backend |
+| `No se pueden eliminar …` (errores 50810–50815) | R14: la información transaccional no se borra | usar **Quitar** en Taller (solo con la reparación en proceso) o cancelar la orden con su motivo |
+| Una orden no aparece al buscar | el filtro de Estado está en «Abiertas» | escribir el número completo (OS-2026-0048) o elegir Estado «Todas» |
 
 ## Forma de trabajo con ramas
 
@@ -207,4 +233,6 @@ Contraseña de todos: `TechCare2026!` (en la base se guarda solo el hash SHA-256
 - [x] **Semana 2 – Base + núcleo:** base v1 y datos iniciales, login y roles, clientes, equipos y órdenes
 - [x] **Semana 3 – Procesos:** diagnóstico, reparación, inventario, compras, procedimientos, transacciones, funciones, primeros reportes
 - [x] **Semana 4 – Integración:** facturación, pagos, entrega, vistas, triggers, índices, 12 reportes, mantenimientos y script maestro
+- [x] **Noviembre – Mejoras:** cuentas de cliente y portal «Mis órdenes», recuperar contraseña, catálogo del proveedor, abonos en efectivo (R12), quitar actividad/repuesto en Taller y R14 completa (script 18), resumen del proceso en el detalle de la orden, comprobante PDF para el cliente, seguridad del login (intentos y límite de peticiones)
+- [x] **Entrega Canvas:** `Grupo_01_TechCare_ER.pdf` y `Grupo_01_TechCare_Creacion.sql` (probado desde cero: 29 tablas, 50 procedimientos, 17 triggers)
 - [ ] **Cierre:** pruebas T01–T14 con evidencia, manual técnico, manual de usuario y defensa
