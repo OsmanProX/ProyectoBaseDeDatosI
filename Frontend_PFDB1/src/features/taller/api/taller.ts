@@ -58,6 +58,7 @@ export interface Actividad {
 
 export interface RepuestoUsado {
   repuestoId: number
+  bodegaId: number
   codigo: string
   repuesto: string
   bodega: string
@@ -119,6 +120,13 @@ export const tallerApi = {
   },
   asignarRepuesto(d: { reparacionId: number; repuestoId: number; bodegaId: number; cantidad: number }) {
     return post<{ existenciaResultante: number }>('/api/taller/reparacion/repuesto', d)
+  },
+  // Script 18: quitar lo registrado por error mientras la reparación está EN_PROCESO
+  quitarRepuesto(d: { reparacionId: number; repuestoId: number; bodegaId: number; cantidad: number; motivo: string }) {
+    return post<{ existenciaResultante: number }>('/api/taller/reparacion/repuesto/quitar', d)
+  },
+  quitarActividad(d: { reparacionId: number; numeroActividad: number }) {
+    return post<unknown>('/api/taller/reparacion/actividad/quitar', d)
   },
   finalizarReparacion(d: { reparacionId: number; costoManoObra: number | null; descripcionTrabajo: string | null }) {
     return post<{ totalSinIVA: number }>('/api/taller/reparacion/finalizar', d)

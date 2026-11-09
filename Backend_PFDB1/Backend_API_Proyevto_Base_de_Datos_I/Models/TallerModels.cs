@@ -60,6 +60,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
     public class RepuestoUsadoModel
     {
         public int RepuestoId { get; set; }
+        public int BodegaId { get; set; }
         public string Codigo { get; set; } = string.Empty;
         public string Repuesto { get; set; } = string.Empty;
         public string Bodega { get; set; } = string.Empty;
@@ -110,6 +111,31 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
         public string? Descripcion { get; set; }
         [Range(typeof(decimal), "0", "99999999", ParseLimitsInInvariantCulture = true, ConvertValueInInvariantCulture = true, ErrorMessage = "Las horas no pueden ser negativas.")]
         public decimal? HorasTrabajadas { get; set; }
+    }
+
+    // Quitar un repuesto asignado por error: lo devuelve a la bodega (sp_QuitarRepuesto, script 18)
+    public class QuitarRepuestoRequest
+    {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la reparación.")]
+        public int ReparacionId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "Indique el repuesto.")]
+        public int RepuestoId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la bodega.")]
+        public int BodegaId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "La cantidad debe ser mayor que cero.")]
+        public int Cantidad { get; set; }
+        [Required(ErrorMessage = "Escriba el motivo de la devolución.")]
+        [StringLength(150, MinimumLength = 5, ErrorMessage = "El motivo debe tener entre 5 y 150 caracteres.")]
+        public string Motivo { get; set; } = string.Empty;
+    }
+
+    // Quitar una actividad registrada por error (sp_QuitarActividad, script 18)
+    public class QuitarActividadRequest
+    {
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la reparación.")]
+        public int ReparacionId { get; set; }
+        [Range(1, int.MaxValue, ErrorMessage = "Indique la actividad.")]
+        public int NumeroActividad { get; set; }
     }
 
     public class AsignarRepuestoRequest
