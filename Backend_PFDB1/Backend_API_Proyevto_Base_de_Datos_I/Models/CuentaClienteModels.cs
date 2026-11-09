@@ -29,6 +29,27 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
         public string? NumeroFactura { get; set; }
         public decimal? Total { get; set; }
         public decimal? Saldo { get; set; }
+
+        // Detalle extra para el portal (consulta de solo lectura, se llena después del SP)
+        public string? Diagnostico { get; set; }
+        public decimal? CostoEstimado { get; set; }
+        public decimal? Pagado { get; set; }
+        public DateTime? UltimoCambio { get; set; }
+        public string? MotivoCancelacion { get; set; }
+        public DateTime? FechaEntrega { get; set; }
+        public string? NombreRecibe { get; set; }
+    }
+
+    public class MiOrdenExtraModel
+    {
+        public int OrdenId { get; set; }
+        public string? Diagnostico { get; set; }
+        public decimal? CostoEstimado { get; set; }
+        public decimal? Pagado { get; set; }
+        public DateTime? UltimoCambio { get; set; }
+        public string? MotivoCancelacion { get; set; }
+        public DateTime? FechaEntrega { get; set; }
+        public string? NombreRecibe { get; set; }
     }
 }
 

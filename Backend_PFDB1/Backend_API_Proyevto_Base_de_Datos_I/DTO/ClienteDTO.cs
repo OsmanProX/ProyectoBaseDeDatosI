@@ -188,6 +188,18 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             }
         }
 
+        // ¿La orden pertenece al cliente ligado a esta cuenta? (para que un cliente no vea órdenes ajenas)
+        public async Task<bool> EsMiOrden(int usuarioId, int ordenId)
+        {
+            using var connection = _dbConnectionFactory.CreateConnection();
+            await connection.OpenAsync();
+            return await connection.ExecuteScalarAsync<int>(
+                @"SELECT COUNT(*) FROM OrdenServicio o
+                  JOIN Usuario u ON u.ClienteId = o.ClienteId
+                  WHERE u.UsuarioId = @UsuarioId AND u.Activo = 1 AND o.OrdenId = @OrdenId",
+                new { UsuarioId = usuarioId, OrdenId = ordenId }) > 0;
+        }
+
         // Usa sp_Cliente_MisOrdenes (script 13): órdenes del cliente que inició sesión.
         public async Task<ResponseDto> MisOrdenes(int usuarioId)
         {
@@ -195,9 +207,44 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             {
                 using var connection = _dbConnectionFactory.CreateConnection();
                 await connection.OpenAsync();
-                var filas = await connection.QueryAsync<MiOrdenModel>(
+                var filas = (await connection.QueryAsync<MiOrdenModel>(
                     "sp_Cliente_MisOrdenes", new { UsuarioId = usuarioId },
-                    commandType: System.Data.CommandType.StoredProcedure);
+                    commandType: System.Data.CommandType.StoredProcedure)).ToList();
+
+                // Detalle extra (solo lectura y solo de las órdenes del cliente de esta cuenta):
+                // diagnóstico y costo estimado, lo pagado, el último cambio de estado
+                // (con el motivo si se canceló) y la entrega.
+                var extras = (await connection.QueryAsync<MiOrdenExtraModel>(
+                    @"SELECT o.OrdenId,
+                             d.Descripcion AS Diagnostico,
+                             d.CostoManoObraEstimado AS CostoEstimado,
+                             (SELECT SUM(p.Monto) FROM Pago p
+                               JOIN Factura f ON f.FacturaId = p.FacturaId
+                              WHERE f.OrdenId = o.OrdenId AND f.Estado <> 'ANULADA' AND p.Estado = 'APLICADO') AS Pagado,
+                             h.FechaCambio AS UltimoCambio,
+                             CASE WHEN o.EstadoOrdenId = 7 THEN h.Observacion END AS MotivoCancelacion,
+                             en.FechaEntrega, en.NombreRecibe
+                      FROM OrdenServicio o
+                      JOIN Usuario u ON u.ClienteId = o.ClienteId AND u.UsuarioId = @UsuarioId
+                      OUTER APPLY (SELECT TOP 1 x.Descripcion, x.CostoManoObraEstimado FROM Diagnostico x
+                                   WHERE x.OrdenId = o.OrdenId ORDER BY x.DiagnosticoId DESC) d
+                      OUTER APPLY (SELECT TOP 1 x.FechaCambio, x.Observacion FROM HistorialEstadoOrden x
+                                   WHERE x.OrdenId = o.OrdenId ORDER BY x.HistorialId DESC) h
+                      OUTER APPLY (SELECT TOP 1 x.FechaEntrega, x.NombreRecibe FROM Entrega x
+                                   WHERE x.OrdenId = o.OrdenId ORDER BY x.EntregaId DESC) en",
+                    new { UsuarioId = usuarioId })).ToDictionary(x => x.OrdenId);
+
+                foreach (var o in filas)
+                {
+                    if (!extras.TryGetValue(o.OrdenId, out var x)) continue;
+                    o.Diagnostico = x.Diagnostico;
+                    o.CostoEstimado = x.CostoEstimado;
+                    o.Pagado = x.Pagado;
+                    o.UltimoCambio = x.UltimoCambio;
+                    o.MotivoCancelacion = x.MotivoCancelacion;
+                    o.FechaEntrega = x.FechaEntrega;
+                    o.NombreRecibe = x.NombreRecibe;
+                }
                 return new ResponseDto { codigo = 200, mensaje = "OK", data = filas };
             }
             catch (SqlException ex)

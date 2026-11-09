@@ -67,6 +67,51 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             }
         }
 
+        // Datos del comprobante solo si la orden es del cliente y ya se entregó
+        private async Task<(OrdenCajaModel o, FacturaModel f, List<PagoModel> pagos, EntregaModel e, string? correo)?> MiComprobante(int ordenId)
+        {
+            var cliente = new ClienteDTO();
+            cliente.SetConexion(_dbConnectionFactory);
+            if (!await cliente.EsMiOrden(UsuarioActual(), ordenId)) return null;
+            var caja = new CajaDTO();
+            caja.SetConexion(_dbConnectionFactory);
+            return await caja.DatosComprobante(ordenId);
+        }
+
+        // GET: api/cliente/mis-ordenes/5/comprobante  → PDF de su orden entregada
+        [Authorize(Roles = "CLIENTE")]
+        [HttpGet("mis-ordenes/{id:int}/comprobante")]
+        public async Task<IActionResult> MiComprobantePdf(int id)
+        {
+            try
+            {
+                if (await MiComprobante(id) is not { } d)
+                    return StatusCode(400, new { codigo = 400, mensaje = "El comprobante está disponible cuando la orden se entrega." });
+                var pdf = PdfComprobante.Generar(d.o, d.f, d.pagos, d.e);
+                return File(pdf, "application/pdf", $"Comprobante_{d.o.NumeroOrden}.pdf");
+            }
+            catch (Exception ex) { return StatusCode(500, new { codigo = 500, mensaje = "MiComprobantePdf(): " + ex.Message }); }
+        }
+
+        // POST: api/cliente/mis-ordenes/5/comprobante/enviar  → al correo registrado del cliente
+        [Authorize(Roles = "CLIENTE")]
+        [HttpPost("mis-ordenes/{id:int}/comprobante/enviar")]
+        public async Task<IActionResult> EnviarMiComprobante(int id)
+        {
+            try
+            {
+                if (await MiComprobante(id) is not { } d)
+                    return StatusCode(400, new { codigo = 400, mensaje = "El comprobante está disponible cuando la orden se entrega." });
+                if (string.IsNullOrWhiteSpace(d.correo))
+                    return StatusCode(400, new { codigo = 400, mensaje = "No tiene correo registrado. Solicite a TechCare que lo agregue." });
+                var pdf = PdfComprobante.Generar(d.o, d.f, d.pagos, d.e);
+                await _correo.EnviarComprobanteAsync(d.correo, d.o.Cliente, d.o.NumeroOrden, pdf);
+                var mensaje = $"Comprobante enviado a {d.correo}.";
+                return Ok(new { codigo = 200, mensaje, data = new { mensaje } });
+            }
+            catch (Exception ex) { return StatusCode(500, new { codigo = 500, mensaje = "No se pudo enviar el correo: " + ex.Message }); }
+        }
+
         // GET: api/cliente?busqueda=juan
         [Authorize(Policy = "GestionarClientes")]
         [HttpGet]
