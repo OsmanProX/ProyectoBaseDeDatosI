@@ -12,6 +12,8 @@ const moneda = (n: number | null | undefined) =>
   (n ?? 0).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' })
 const fecha = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+// Agrega punto final al motivo si no lo trae
+const conPunto = (t: string) => (/[.!?]$/.test(t.trim()) ? t.trim() : t.trim() + '.')
 const fechaHora = (iso: string | null) =>
   iso ? new Date(iso).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 
@@ -116,7 +118,7 @@ onMounted(async () => {
       <!-- Avisos según el estado -->
       <div v-if="o.estado === 'CANCELADO'" class="aviso cancelado">
         <b>Orden cancelada el {{ fecha(o.ultimoCambio) }}.</b>
-        <span v-if="o.motivoCancelacion"> Motivo: {{ o.motivoCancelacion }}</span>
+        <span v-if="o.motivoCancelacion"> Motivo: {{ conPunto(o.motivoCancelacion) }}</span>
         <span> Puede pasar a recoger su equipo a TechCare.</span>
       </div>
       <div v-else-if="o.estado === 'ESPERANDO_AUTORIZACION'" class="aviso espera">
