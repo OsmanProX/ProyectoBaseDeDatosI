@@ -34,12 +34,15 @@ const errorLista = ref('')
 const buscar = ref('')
 const filtroEstado = ref('ABIERTAS')
 const aviso = ref('')
+// Si se escribe un número de orden completo (OS-2026-0048) se busca en todos los estados,
+// porque la orden puede estar entregada o cancelada y el filtro «Abiertas» la ocultaría.
+const buscaNumeroOrden = computed(() => /^OS-\d{4}-\d{4}$/i.test(buscar.value.trim()))
 
 async function cargar() {
   cargando.value = true
   errorLista.value = ''
   try {
-    ordenes.value = await ordenesApi.listar(buscar.value, filtroEstado.value)
+    ordenes.value = await ordenesApi.listar(buscar.value, buscaNumeroOrden.value ? '' : filtroEstado.value)
   } catch (e) {
     errorLista.value = (e as Error).message
   } finally {
@@ -164,6 +167,8 @@ const opcionesEstado = computed(() => {
     .map((id) => ESTADOS[id - 1]!)
 })
 const cerrada = computed(() => !!actual.value && (actual.value.estadoId === 6 || actual.value.estadoId === 7))
+// Si la única opción es Cancelado (p. ej. Recepción), el bloque se muestra como «Cancelar orden»
+const soloCancelar = computed(() => opcionesEstado.value.length === 1 && opcionesEstado.value[0]!.id === 7)
 
 async function cargarHistorial() {
   if (!actual.value) return
@@ -190,11 +195,14 @@ async function abrirDetalle(o: OrdenResumen) {
 async function cambiarEstado() {
   if (!actual.value) return
   errorCambio.value = ''
+  if (soloCancelar.value) estadoNuevoId.value = 7
   if (!estadoNuevoId.value) { errorCambio.value = 'Seleccione el nuevo estado.'; return }
   if (estadoNuevoId.value === 7 && observacion.value.trim().length < 10) {
     errorCambio.value = 'Indique el motivo de la cancelación (mínimo 10 caracteres).'
     return
   }
+  if (estadoNuevoId.value === 7 &&
+      !window.confirm(`¿Cancelar la orden ${actual.value.numeroOrden}? Ya no se podrá reabrir.`)) return
   cambiando.value = true
   try {
     await ordenesApi.cambiarEstado(
@@ -235,7 +243,7 @@ async function cambiarEstado() {
       </label>
       <label class="campo">
         <span>Estado</span>
-        <select v-model="filtroEstado">
+        <select v-model="filtroEstado" :disabled="buscaNumeroOrden" :title="buscaNumeroOrden ? 'Al buscar un número de orden se muestran todos los estados' : undefined">
           <option value="ABIERTAS">Abiertas</option>
           <option v-for="e in ESTADOS" :key="e.id" :value="e.codigo">{{ e.nombre }}</option>
           <option value="">Todas</option>
@@ -255,7 +263,12 @@ async function cambiarEstado() {
         <tbody>
           <tr v-if="cargando"><td colspan="7" class="vacio">Cargando órdenes…</td></tr>
           <tr v-else-if="!ordenes.length">
-            <td colspan="7" class="vacio">No hay órdenes con ese criterio. Use «Nueva orden» para registrar un ingreso.</td>
+            <td colspan="7" class="vacio">
+              <template v-if="buscar.trim() && filtroEstado && !buscaNumeroOrden">
+                No hay órdenes con ese criterio en este estado. Pruebe con Estado: «Todas».
+              </template>
+              <template v-else>No hay órdenes con ese criterio. Use «Nueva orden» para registrar un ingreso.</template>
+            </td>
           </tr>
           <tr v-for="o in ordenes" :key="o.ordenId">
             <td class="num">{{ o.numeroOrden }}</td>
@@ -394,7 +407,10 @@ async function cambiarEstado() {
           </table>
         </div>
 
-        <h3>Cambio manual de estado (casos especiales)
+        <h3 v-if="soloCancelar && !cerrada && actual.estadoId !== 5">Cancelar orden
+          <InfoTip texto="Úselo cuando el cliente ya no quiere la reparación. Escriba el motivo: queda en el historial de la orden (R05). Los demás estados avanzan solos desde Taller y Caja." />
+        </h3>
+        <h3 v-else>Cambio manual de estado (casos especiales)
           <InfoTip texto="Los estados avanzan solos desde Taller (diagnóstico, autorización, reparación, finalizar) y Caja (entrega). Aquí solo se usa para casos especiales, como iniciar el diagnóstico o cancelar la orden con su motivo. Cada cambio queda en el historial (R05)." />
         </h3>
         <p v-if="!puedeCambiarEstado && !cerrada && actual.estadoId !== 5" class="nota">
@@ -409,7 +425,13 @@ async function cambiarEstado() {
         </p>
         <form v-else-if="puedeCambiarEstado && actual.estadoId !== 5" class="cambio" novalidate @submit.prevent="cambiarEstado">
           <p v-if="errorCambio" class="error" role="alert">{{ errorCambio }}</p>
-          <div class="fila">
+          <div v-if="soloCancelar" class="fila una">
+            <label class="campo grande">
+              <span>Motivo de la cancelación (obligatorio)</span>
+              <input v-model="observacion" maxlength="300" placeholder="Ej. El cliente decidió no reparar el equipo" />
+            </label>
+          </div>
+          <div v-else class="fila">
             <label class="campo">
               <span>Nuevo estado</span>
               <select v-model.number="estadoNuevoId">
@@ -429,7 +451,7 @@ async function cambiarEstado() {
           <p class="nota">Cambia: <b>{{ usuario.nombreCompleto }}</b> ({{ usuario.rol }})</p>
           <div class="botones">
             <button type="submit" class="btn primario" :disabled="cambiando">
-              {{ cambiando ? 'Guardando…' : 'Cambiar estado' }}
+              {{ cambiando ? 'Guardando…' : soloCancelar ? 'Cancelar orden' : 'Cambiar estado' }}
             </button>
           </div>
         </form>
@@ -524,6 +546,7 @@ table.compacta th, table.compacta td { padding: 7px 10px; }
 .modal form, .detalle { display: flex; flex-direction: column; gap: 14px; text-align: left; }
 .cambio { border: 1px solid var(--c-border); border-radius: 4px; padding: 14px; background: var(--c-row); }
 .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.fila.una { grid-template-columns: 1fr; }
 .botones { display: flex; justify-content: flex-end; gap: 10px; }
 .det-cabecera { display: flex; align-items: center; gap: 12px; }
 .datos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 20px; margin: 0;
