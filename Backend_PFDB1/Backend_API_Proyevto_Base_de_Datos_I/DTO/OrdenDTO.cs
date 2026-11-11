@@ -97,6 +97,54 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             return respuesta;
         }
 
+        // Resumen del proceso de la orden (solo lectura, no modifica nada):
+        // último diagnóstico, su reparación, la factura vigente con lo pagado y saldo, y la entrega.
+        public async Task<ResponseDto> ConsultarResumen(int id)
+        {
+            ResponseDto respuesta = new();
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+
+                var resumen = await connection.QueryFirstOrDefaultAsync<ResumenOrdenModel>(
+                    @"SELECT d.FechaDiagnostico, td.NombreCompleto AS TecnicoDiagnostico,
+                             d.Descripcion AS Diagnostico, d.CostoManoObraEstimado,
+                             r.Estado AS EstadoReparacion, tr.NombreCompleto AS TecnicoReparacion,
+                             r.FechaInicio, r.FechaFin, r.DescripcionTrabajo AS TrabajoRealizado, r.CostoManoObra,
+                             (SELECT COUNT(*) FROM ActividadReparacion a WHERE a.ReparacionId = r.ReparacionId) AS Actividades,
+                             (SELECT ISNULL(SUM(a.HorasTrabajadas), 0) FROM ActividadReparacion a WHERE a.ReparacionId = r.ReparacionId) AS Horas,
+                             (SELECT ISNULL(SUM(rr.Cantidad), 0) FROM ReparacionRepuesto rr WHERE rr.ReparacionId = r.ReparacionId) AS UnidadesRepuesto,
+                             (SELECT ISNULL(SUM(rr.Cantidad * rr.PrecioVentaUnitario), 0) FROM ReparacionRepuesto rr WHERE rr.ReparacionId = r.ReparacionId) AS VentaRepuestos,
+                             f.NumeroFactura, f.FechaEmision, f.Total AS TotalFactura, f.Estado AS EstadoFactura,
+                             (SELECT ISNULL(SUM(p.Monto), 0) FROM Pago p WHERE p.FacturaId = f.FacturaId AND p.Estado = 'APLICADO') AS Pagado,
+                             dbo.fn_SaldoFactura(f.FacturaId) AS Saldo,
+                             e.FechaEntrega, e.NombreRecibe, ue.NombreCompleto AS EntregadoPor
+                      FROM OrdenServicio o
+                      OUTER APPLY (SELECT TOP 1 * FROM Diagnostico x WHERE x.OrdenId = o.OrdenId ORDER BY x.DiagnosticoId DESC) d
+                      LEFT JOIN Usuario td ON td.UsuarioId = d.TecnicoId
+                      OUTER APPLY (SELECT TOP 1 * FROM Reparacion x WHERE x.DiagnosticoId = d.DiagnosticoId ORDER BY x.ReparacionId DESC) r
+                      LEFT JOIN Usuario tr ON tr.UsuarioId = r.TecnicoId
+                      OUTER APPLY (SELECT TOP 1 * FROM Factura x WHERE x.OrdenId = o.OrdenId AND x.Estado <> 'ANULADA' ORDER BY x.FacturaId DESC) f
+                      OUTER APPLY (SELECT TOP 1 * FROM Entrega x WHERE x.OrdenId = o.OrdenId ORDER BY x.EntregaId DESC) e
+                      LEFT JOIN Usuario ue ON ue.UsuarioId = e.UsuarioEntregaId
+                      WHERE o.OrdenId = @Id",
+                    new { Id = id });
+
+                if (resumen is null)
+                    return new ResponseDto { codigo = 404, mensaje = "La orden no existe." };
+
+                respuesta.codigo = 200;
+                respuesta.mensaje = "Operación realizada exitosamente.";
+                respuesta.data = resumen;
+            }
+            catch (Exception ex)
+            {
+                respuesta = new ResponseDto { codigo = 500, mensaje = "ConsultarResumen(): " + ex.Message };
+            }
+            return respuesta;
+        }
+
         public async Task<ResponseDto> ConsultarPorId(int id)
         {
             ResponseDto respuesta = new();

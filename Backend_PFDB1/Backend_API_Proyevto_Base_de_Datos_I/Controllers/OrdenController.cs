@@ -80,6 +80,24 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             }
         }
 
+        // GET: api/orden/5/resumen  (diagnóstico, reparación, factura y entrega; solo lectura)
+        [Authorize(Policy = "VerOrdenes")]
+        [HttpGet("{id:int}/resumen")]
+        public async Task<IActionResult> ConsultarResumen(int id)
+        {
+            try
+            {
+                var request = new OrdenDTO();
+                request.SetConexion(_dbConnectionFactory);
+                var respuesta = await request.ConsultarResumen(id);
+                return StatusCode(respuesta.codigo, new { respuesta.codigo, respuesta.mensaje, respuesta.data });
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { codigo = 500, mensaje = "ConsultarResumen(): " + ex.Message });
+            }
+        }
+
         // GET: api/orden/5/historial  (solo el historial de estados)
         [Authorize(Policy = "VerOrdenes")]
         [HttpGet("{id:int}/historial")]

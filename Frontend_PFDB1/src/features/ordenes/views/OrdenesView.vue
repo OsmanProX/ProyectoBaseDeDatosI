@@ -4,7 +4,7 @@ import { useAuthStore } from '@/features/auth/stores/auth.store'
 import InfoTip from '@/shared/components/InfoTip.vue'
 import {
   ordenesApi, ESTADOS, TRANSICIONES, PRIORIDADES,
-  type OrdenResumen, type HistorialEstado, type OpcionCliente, type OpcionEquipo,
+  type OrdenResumen, type HistorialEstado, type ResumenOrden, type OpcionCliente, type OpcionEquipo,
   type Prioridad, type CodigoEstado,
 } from '../api/ordenes'
 
@@ -24,6 +24,8 @@ const fechaHora = (iso: string) =>
   new Date(iso).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' })
 const fecha = (iso: string | null) =>
   iso ? new Date(iso.length === 10 ? iso + 'T00:00:00' : iso).toLocaleDateString('es-GT') : '—'
+const q = (n: number | null) =>
+  n === null ? '—' : n.toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' })
 // Fecha local (toISOString usa UTC: en Guatemala, después de las 18:00 ya daría el día siguiente)
 const hoy = new Date().toLocaleDateString('en-CA')
 
@@ -34,12 +36,15 @@ const errorLista = ref('')
 const buscar = ref('')
 const filtroEstado = ref('ABIERTAS')
 const aviso = ref('')
+// Si se escribe un número de orden completo (OS-2026-0048) se busca en todos los estados,
+// porque la orden puede estar entregada o cancelada y el filtro «Abiertas» la ocultaría.
+const buscaNumeroOrden = computed(() => /^OS-\d{4}-\d{4}$/i.test(buscar.value.trim()))
 
 async function cargar() {
   cargando.value = true
   errorLista.value = ''
   try {
-    ordenes.value = await ordenesApi.listar(buscar.value, filtroEstado.value)
+    ordenes.value = await ordenesApi.listar(buscar.value, buscaNumeroOrden.value ? '' : filtroEstado.value)
   } catch (e) {
     errorLista.value = (e as Error).message
   } finally {
@@ -164,6 +169,22 @@ const opcionesEstado = computed(() => {
     .map((id) => ESTADOS[id - 1]!)
 })
 const cerrada = computed(() => !!actual.value && (actual.value.estadoId === 6 || actual.value.estadoId === 7))
+// Si la única opción es Cancelado (p. ej. Recepción), el bloque se muestra como «Cancelar orden»
+const soloCancelar = computed(() => opcionesEstado.value.length === 1 && opcionesEstado.value[0]!.id === 7)
+
+// Resumen del proceso (Taller y Caja); si falla, el detalle se sigue viendo sin esta parte
+const resumen = ref<ResumenOrden | null>(null)
+const errorResumen = ref('')
+async function cargarResumen() {
+  if (!actual.value) return
+  errorResumen.value = ''
+  try {
+    resumen.value = await ordenesApi.resumen(actual.value.ordenId)
+  } catch (e) {
+    resumen.value = null
+    errorResumen.value = (e as Error).message
+  }
+}
 
 async function cargarHistorial() {
   if (!actual.value) return
@@ -183,18 +204,22 @@ async function abrirDetalle(o: OrdenResumen) {
   estadoNuevoId.value = 0
   observacion.value = ''
   errorCambio.value = ''
+  resumen.value = null
   dlgDetalle.value?.showModal()
-  await cargarHistorial()
+  await Promise.all([cargarHistorial(), cargarResumen()])
 }
 
 async function cambiarEstado() {
   if (!actual.value) return
   errorCambio.value = ''
+  if (soloCancelar.value) estadoNuevoId.value = 7
   if (!estadoNuevoId.value) { errorCambio.value = 'Seleccione el nuevo estado.'; return }
   if (estadoNuevoId.value === 7 && observacion.value.trim().length < 10) {
     errorCambio.value = 'Indique el motivo de la cancelación (mínimo 10 caracteres).'
     return
   }
+  if (estadoNuevoId.value === 7 &&
+      !window.confirm(`¿Cancelar la orden ${actual.value.numeroOrden}? Ya no se podrá reabrir.`)) return
   cambiando.value = true
   try {
     await ordenesApi.cambiarEstado(
@@ -205,7 +230,7 @@ async function cambiarEstado() {
     estadoNuevoId.value = 0
     observacion.value = ''
     mostrarAviso(`${actual.value.numeroOrden} pasó a ${est.nombre}.`)
-    await Promise.all([cargarHistorial(), cargar()])
+    await Promise.all([cargarHistorial(), cargarResumen(), cargar()])
   } catch (e) {
     errorCambio.value = (e as Error).message
   } finally {
@@ -235,7 +260,7 @@ async function cambiarEstado() {
       </label>
       <label class="campo">
         <span>Estado</span>
-        <select v-model="filtroEstado">
+        <select v-model="filtroEstado" :disabled="buscaNumeroOrden" :title="buscaNumeroOrden ? 'Al buscar un número de orden se muestran todos los estados' : undefined">
           <option value="ABIERTAS">Abiertas</option>
           <option v-for="e in ESTADOS" :key="e.id" :value="e.codigo">{{ e.nombre }}</option>
           <option value="">Todas</option>
@@ -255,7 +280,12 @@ async function cambiarEstado() {
         <tbody>
           <tr v-if="cargando"><td colspan="7" class="vacio">Cargando órdenes…</td></tr>
           <tr v-else-if="!ordenes.length">
-            <td colspan="7" class="vacio">No hay órdenes con ese criterio. Use «Nueva orden» para registrar un ingreso.</td>
+            <td colspan="7" class="vacio">
+              <template v-if="buscar.trim() && filtroEstado && !buscaNumeroOrden">
+                No hay órdenes con ese criterio en este estado. Pruebe con Estado: «Todas».
+              </template>
+              <template v-else>No hay órdenes con ese criterio. Use «Nueva orden» para registrar un ingreso.</template>
+            </td>
           </tr>
           <tr v-for="o in ordenes" :key="o.ordenId">
             <td class="num">{{ o.numeroOrden }}</td>
@@ -377,6 +407,64 @@ async function cambiarEstado() {
           <div v-if="actual.observaciones" class="completo"><dt>Observaciones</dt><dd>{{ actual.observaciones }}</dd></div>
         </dl>
 
+        <h3>Resumen del proceso
+          <InfoTip texto="Lo que pasó con la orden en Taller (diagnóstico y reparación) y en Caja (factura, pagos y entrega). Solo consulta: los cambios se hacen en cada pantalla." />
+        </h3>
+        <p v-if="errorResumen" class="nota">No se pudo cargar el resumen: {{ errorResumen }}</p>
+        <div v-else-if="resumen" class="etapas">
+          <section class="etapa">
+            <h4>Diagnóstico</h4>
+            <template v-if="resumen.fechaDiagnostico">
+              <p>{{ resumen.diagnostico }}</p>
+              <p class="nota">
+                {{ resumen.tecnicoDiagnostico }} · {{ fechaHora(resumen.fechaDiagnostico) }}
+                · Mano de obra estimada {{ q(resumen.costoManoObraEstimado) }}
+              </p>
+            </template>
+            <p v-else class="nota">Pendiente.</p>
+          </section>
+
+          <section class="etapa">
+            <h4>Reparación</h4>
+            <template v-if="resumen.fechaInicio">
+              <p v-if="resumen.trabajoRealizado">{{ resumen.trabajoRealizado }}</p>
+              <p class="nota">
+                {{ resumen.tecnicoReparacion }} ·
+                {{ resumen.estadoReparacion === 'FINALIZADA' ? 'Finalizada' : resumen.estadoReparacion === 'CANCELADA' ? 'Cancelada' : 'En proceso' }}
+                · Inicio {{ fechaHora(resumen.fechaInicio) }}<template v-if="resumen.fechaFin"> · Fin {{ fechaHora(resumen.fechaFin) }}</template>
+              </p>
+              <p class="nota">
+                {{ resumen.actividades }} actividad(es), {{ resumen.horas }} h ·
+                {{ resumen.unidadesRepuesto }} repuesto(s) por {{ q(resumen.ventaRepuestos) }}
+                <template v-if="resumen.costoManoObra !== null"> · Mano de obra {{ q(resumen.costoManoObra) }}</template>
+              </p>
+            </template>
+            <p v-else class="nota">Pendiente.</p>
+          </section>
+
+          <section class="etapa">
+            <h4>Factura y pagos</h4>
+            <template v-if="resumen.numeroFactura">
+              <p><b class="num">{{ resumen.numeroFactura }}</b> · Total {{ q(resumen.totalFactura) }}</p>
+              <p class="nota">
+                Emitida {{ fechaHora(resumen.fechaEmision!) }} · Pagado {{ q(resumen.pagado) }} ·
+                <b :class="{ saldo: (resumen.saldo ?? 0) > 0 }">Saldo {{ q(resumen.saldo) }}</b>
+              </p>
+            </template>
+            <p v-else class="nota">Sin factura.</p>
+          </section>
+
+          <section class="etapa">
+            <h4>Entrega</h4>
+            <template v-if="resumen.fechaEntrega">
+              <p>Recibió: {{ resumen.nombreRecibe }}</p>
+              <p class="nota">Entregó {{ resumen.entregadoPor }} · {{ fechaHora(resumen.fechaEntrega) }}</p>
+            </template>
+            <p v-else class="nota">Pendiente.</p>
+          </section>
+        </div>
+        <p v-else class="nota">Cargando resumen…</p>
+
         <h3>Historial de estados</h3>
         <div class="tabla-wrap">
           <table class="compacta">
@@ -394,7 +482,10 @@ async function cambiarEstado() {
           </table>
         </div>
 
-        <h3>Cambio manual de estado (casos especiales)
+        <h3 v-if="soloCancelar && !cerrada && actual.estadoId !== 5">Cancelar orden
+          <InfoTip texto="Úselo cuando el cliente ya no quiere la reparación. Escriba el motivo: queda en el historial de la orden (R05). Los demás estados avanzan solos desde Taller y Caja." />
+        </h3>
+        <h3 v-else>Cambio manual de estado (casos especiales)
           <InfoTip texto="Los estados avanzan solos desde Taller (diagnóstico, autorización, reparación, finalizar) y Caja (entrega). Aquí solo se usa para casos especiales, como iniciar el diagnóstico o cancelar la orden con su motivo. Cada cambio queda en el historial (R05)." />
         </h3>
         <p v-if="!puedeCambiarEstado && !cerrada && actual.estadoId !== 5" class="nota">
@@ -409,7 +500,13 @@ async function cambiarEstado() {
         </p>
         <form v-else-if="puedeCambiarEstado && actual.estadoId !== 5" class="cambio" novalidate @submit.prevent="cambiarEstado">
           <p v-if="errorCambio" class="error" role="alert">{{ errorCambio }}</p>
-          <div class="fila">
+          <div v-if="soloCancelar" class="fila una">
+            <label class="campo grande">
+              <span>Motivo de la cancelación (obligatorio)</span>
+              <input v-model="observacion" maxlength="300" placeholder="Ej. El cliente decidió no reparar el equipo" />
+            </label>
+          </div>
+          <div v-else class="fila">
             <label class="campo">
               <span>Nuevo estado</span>
               <select v-model.number="estadoNuevoId">
@@ -429,7 +526,7 @@ async function cambiarEstado() {
           <p class="nota">Cambia: <b>{{ usuario.nombreCompleto }}</b> ({{ usuario.rol }})</p>
           <div class="botones">
             <button type="submit" class="btn primario" :disabled="cambiando">
-              {{ cambiando ? 'Guardando…' : 'Cambiar estado' }}
+              {{ cambiando ? 'Guardando…' : soloCancelar ? 'Cancelar orden' : 'Cambiar estado' }}
             </button>
           </div>
         </form>
@@ -524,17 +621,23 @@ table.compacta th, table.compacta td { padding: 7px 10px; }
 .modal form, .detalle { display: flex; flex-direction: column; gap: 14px; text-align: left; }
 .cambio { border: 1px solid var(--c-border); border-radius: 4px; padding: 14px; background: var(--c-row); }
 .fila { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.fila.una { grid-template-columns: 1fr; }
 .botones { display: flex; justify-content: flex-end; gap: 10px; }
 .det-cabecera { display: flex; align-items: center; gap: 12px; }
 .datos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 20px; margin: 0;
   padding: 14px; background: var(--c-row); border-radius: 4px; }
 .datos div { min-width: 0; }
 .datos .completo { grid-column: 1 / -1; }
+.etapas { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.etapa { border: 1px solid var(--c-border); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.etapa h4 { margin: 0 0 4px; font-size: 14px; }
+.etapa p { margin: 2px 0 0; overflow-wrap: anywhere; }
+.etapa .saldo { color: var(--c-danger); }
 .datos dt { font-size: 13px; font-weight: 600; color: var(--c-muted); }
 .datos dd { margin: 2px 0 0; overflow-wrap: anywhere; }
 
 @media (max-width: 700px) {
-  .fila, .datos { grid-template-columns: 1fr; }
+  .fila, .datos, .etapas { grid-template-columns: 1fr; }
   .cabecera { flex-direction: column; align-items: stretch; }
 }
 </style>

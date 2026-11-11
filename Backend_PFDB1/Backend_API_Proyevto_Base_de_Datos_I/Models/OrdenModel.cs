@@ -57,4 +57,35 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Models
         public string? Usuario { get; set; }
         public string? Observacion { get; set; }
     }
+
+    // Resumen del proceso de una orden (solo lectura): diagnóstico, reparación, factura y entrega
+    public class ResumenOrdenModel
+    {
+        public DateTime? FechaDiagnostico { get; set; }
+        public string? TecnicoDiagnostico { get; set; }
+        public string? Diagnostico { get; set; }
+        public decimal? CostoManoObraEstimado { get; set; }
+
+        public string? EstadoReparacion { get; set; }
+        public string? TecnicoReparacion { get; set; }
+        public DateTime? FechaInicio { get; set; }
+        public DateTime? FechaFin { get; set; }
+        public string? TrabajoRealizado { get; set; }
+        public decimal? CostoManoObra { get; set; }
+        public int Actividades { get; set; }
+        public decimal Horas { get; set; }
+        public int UnidadesRepuesto { get; set; }
+        public decimal VentaRepuestos { get; set; }
+
+        public string? NumeroFactura { get; set; }
+        public DateTime? FechaEmision { get; set; }
+        public decimal? TotalFactura { get; set; }
+        public string? EstadoFactura { get; set; }
+        public decimal? Pagado { get; set; }
+        public decimal? Saldo { get; set; }
+
+        public DateTime? FechaEntrega { get; set; }
+        public string? NombreRecibe { get; set; }
+        public string? EntregadoPor { get; set; }
+    }
 }

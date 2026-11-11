@@ -117,7 +117,7 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
                         new { R = reparacion.ReparacionId })).ToList();
 
                     repuestos = (await connection.QueryAsync<RepuestoUsadoModel>(
-                        @"SELECT rr.RepuestoId, rp.Codigo, rp.Nombre AS Repuesto, b.Nombre AS Bodega,
+                        @"SELECT rr.RepuestoId, rr.BodegaId, rp.Codigo, rp.Nombre AS Repuesto, b.Nombre AS Bodega,
                                  rr.Cantidad, rr.PrecioVentaUnitario,
                                  rr.Cantidad * rr.PrecioVentaUnitario AS Subtotal, rr.FechaRegistro
                           FROM ReparacionRepuesto rr
@@ -338,6 +338,68 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.DTO
             catch (Exception ex)
             {
                 respuesta = new ResponseDto { codigo = 500, mensaje = "AsignarRepuesto(): " + ex.Message };
+            }
+            return respuesta;
+        }
+
+        // POST: sp_QuitarRepuesto (devuelve a la bodega y registra la ENTRADA en una transacción)
+        public async Task<ResponseDto> QuitarRepuesto(QuitarRepuestoRequest req, int usuarioId)
+        {
+            ResponseDto respuesta = new();
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+                var fila = await connection.QueryFirstOrDefaultAsync(
+                    "sp_QuitarRepuesto",
+                    new
+                    {
+                        ReparacionId = req.ReparacionId,
+                        RepuestoId = req.RepuestoId,
+                        BodegaId = req.BodegaId,
+                        Cantidad = req.Cantidad,
+                        UsuarioId = usuarioId,
+                        Motivo = req.Motivo.Trim()
+                    },
+                    commandType: CommandType.StoredProcedure);
+                respuesta.codigo = 200;
+                respuesta.mensaje = "Repuesto devuelto a la bodega.";
+                respuesta.data = FilaCamel((object?)fila);
+            }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "QuitarRepuesto(): " + ex.Message };
+            }
+            catch (Exception ex)
+            {
+                respuesta = new ResponseDto { codigo = 500, mensaje = "QuitarRepuesto(): " + ex.Message };
+            }
+            return respuesta;
+        }
+
+        // POST: sp_QuitarActividad (solo con la reparación EN_PROCESO)
+        public async Task<ResponseDto> QuitarActividad(QuitarActividadRequest req, int usuarioId)
+        {
+            ResponseDto respuesta = new();
+            try
+            {
+                using var connection = _dbConnectionFactory.CreateConnection();
+                await connection.OpenAsync();
+                var fila = await connection.QueryFirstOrDefaultAsync(
+                    "sp_QuitarActividad",
+                    new { ReparacionId = req.ReparacionId, NumeroActividad = req.NumeroActividad, UsuarioId = usuarioId },
+                    commandType: CommandType.StoredProcedure);
+                respuesta.codigo = 200;
+                respuesta.mensaje = "Actividad quitada.";
+                respuesta.data = FilaCamel((object?)fila);
+            }
+            catch (SqlException ex)
+            {
+                respuesta = new ResponseDto { codigo = 400, mensaje = "QuitarActividad(): " + ex.Message };
+            }
+            catch (Exception ex)
+            {
+                respuesta = new ResponseDto { codigo = 500, mensaje = "QuitarActividad(): " + ex.Message };
             }
             return respuesta;
         }

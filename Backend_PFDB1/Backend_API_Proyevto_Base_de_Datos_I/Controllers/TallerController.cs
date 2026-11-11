@@ -143,6 +143,38 @@ namespace Backend_API_Proyevto_Base_de_Datos_I.Controllers
             }
         }
 
+        // POST: api/taller/reparacion/repuesto/quitar  (sp_QuitarRepuesto, script 18)
+        [HttpPost("reparacion/repuesto/quitar")]
+        public async Task<IActionResult> QuitarRepuesto([FromBody] QuitarRepuestoRequest request)
+        {
+            try
+            {
+                var usuarioId = UsuarioIdToken();
+                if (usuarioId is null) return StatusCode(401, new { codigo = 401, mensaje = "Token sin UsuarioId válido." });
+                return Responder(await NuevoDTO().QuitarRepuesto(request, usuarioId.Value));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { codigo = 500, mensaje = "QuitarRepuesto(): " + ex.Message });
+            }
+        }
+
+        // POST: api/taller/reparacion/actividad/quitar  (sp_QuitarActividad, script 18)
+        [HttpPost("reparacion/actividad/quitar")]
+        public async Task<IActionResult> QuitarActividad([FromBody] QuitarActividadRequest request)
+        {
+            try
+            {
+                var usuarioId = UsuarioIdToken();
+                if (usuarioId is null) return StatusCode(401, new { codigo = 401, mensaje = "Token sin UsuarioId válido." });
+                return Responder(await NuevoDTO().QuitarActividad(request, usuarioId.Value));
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { codigo = 500, mensaje = "QuitarActividad(): " + ex.Message });
+            }
+        }
+
         // POST: api/taller/reparacion/finalizar  (sp_FinalizarReparacion)
         [HttpPost("reparacion/finalizar")]
         public async Task<IActionResult> FinalizarReparacion([FromBody] FinalizarReparacionRequest request)

@@ -61,6 +61,33 @@ export interface HistorialEstado {
   observacion: string | null
 }
 
+// GET api/orden/{id}/resumen: lo que pasó con la orden en Taller y Caja (null = todavía no llega a esa etapa)
+export interface ResumenOrden {
+  fechaDiagnostico: string | null
+  tecnicoDiagnostico: string | null
+  diagnostico: string | null
+  costoManoObraEstimado: number | null
+  estadoReparacion: string | null
+  tecnicoReparacion: string | null
+  fechaInicio: string | null
+  fechaFin: string | null
+  trabajoRealizado: string | null
+  costoManoObra: number | null
+  actividades: number
+  horas: number
+  unidadesRepuesto: number
+  ventaRepuestos: number
+  numeroFactura: string | null
+  fechaEmision: string | null
+  totalFactura: number | null
+  estadoFactura: string | null
+  pagado: number | null
+  saldo: number | null
+  fechaEntrega: string | null
+  nombreRecibe: string | null
+  entregadoPor: string | null
+}
+
 export interface NuevaOrden {
   clienteId: number
   equipoId: number
@@ -154,6 +181,9 @@ const apiReal = {
   },
   historial(ordenId: number) {
     return request<HistorialEstado[]>(`/api/orden/${ordenId}/historial`)
+  },
+  resumen(ordenId: number) {
+    return request<ResumenOrden>(`/api/orden/${ordenId}/resumen`)
   },
   crear(data: NuevaOrden) {
     // POST api/orden/registrar (sp_RegistrarOrden)
@@ -282,6 +312,18 @@ const apiDemo = {
         || o.numeroSerie.toLowerCase().includes(b))
       .sort((a, c) => c.fechaIngreso.localeCompare(a.fechaIngreso))
       .map(({ tieneDiagnostico: _d, tieneReparacion: _r, ...o }) => ({ ...o }))
+  },
+
+  async resumen(_ordenId: number): Promise<ResumenOrden> {
+    await esperar()
+    // En modo demo no hay Taller ni Caja: la orden todavía no tiene diagnóstico
+    return {
+      fechaDiagnostico: null, tecnicoDiagnostico: null, diagnostico: null, costoManoObraEstimado: null,
+      estadoReparacion: null, tecnicoReparacion: null, fechaInicio: null, fechaFin: null,
+      trabajoRealizado: null, costoManoObra: null, actividades: 0, horas: 0, unidadesRepuesto: 0,
+      ventaRepuestos: 0, numeroFactura: null, fechaEmision: null, totalFactura: null, estadoFactura: null,
+      pagado: null, saldo: null, fechaEntrega: null, nombreRecibe: null, entregadoPor: null,
+    }
   },
 
   async historial(ordenId: number): Promise<HistorialEstado[]> {

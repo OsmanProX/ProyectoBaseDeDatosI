@@ -12,6 +12,10 @@ const moneda = (n: number | null | undefined) =>
   (n ?? 0).toLocaleString('es-GT', { style: 'currency', currency: 'GTQ' })
 const fecha = (iso: string | null) =>
   iso ? new Date(iso).toLocaleDateString('es-GT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—'
+// Agrega punto final al motivo si no lo trae
+const conPunto = (t: string) => (/[.!?]$/.test(t.trim()) ? t.trim() : t.trim() + '.')
+const fechaHora = (iso: string | null) =>
+  iso ? new Date(iso).toLocaleString('es-GT', { dateStyle: 'short', timeStyle: 'short' }) : '—'
 
 // Pasos del proceso, en el orden del flujo de TechCare
 const PASOS = [
@@ -28,6 +32,39 @@ const textoEstado = (estado: string) =>
 
 const activas = computed(() => ordenes.value.filter((o) => !['ENTREGADO', 'CANCELADO'].includes(o.estado)).length)
 const saldoTotal = computed(() => ordenes.value.reduce((s, o) => s + (o.saldo ?? 0), 0))
+
+// Filtro: en proceso / historial (entregadas y canceladas) / todas
+const filtro = ref<'activas' | 'historial' | 'todas'>('todas')
+const cerrada = (o: MiOrden) => o.estado === 'ENTREGADO' || o.estado === 'CANCELADO'
+const visibles = computed(() =>
+  ordenes.value.filter((o) => filtro.value === 'todas' || (filtro.value === 'activas' ? !cerrada(o) : cerrada(o))),
+)
+
+// Comprobante en PDF (orden entregada): descargar o enviar a su correo
+const ocupado = ref(0)
+const avisos = ref<Record<number, { texto: string; error: boolean }>>({})
+async function descargar(o: MiOrden) {
+  ocupado.value = o.ordenId
+  avisos.value[o.ordenId] = { texto: '', error: false }
+  try {
+    await portalApi.descargarComprobante(o.ordenId, o.numeroOrden)
+  } catch (e) {
+    avisos.value[o.ordenId] = { texto: (e as Error).message, error: true }
+  } finally {
+    ocupado.value = 0
+  }
+}
+async function enviar(o: MiOrden) {
+  ocupado.value = o.ordenId
+  try {
+    const r = await portalApi.enviarComprobante(o.ordenId)
+    avisos.value[o.ordenId] = { texto: r.mensaje, error: false }
+  } catch (e) {
+    avisos.value[o.ordenId] = { texto: (e as Error).message, error: true }
+  } finally {
+    ocupado.value = 0
+  }
+}
 
 onMounted(async () => {
   try {
@@ -57,7 +94,14 @@ onMounted(async () => {
     <p v-else-if="error" class="error" role="alert">{{ error }}</p>
     <p v-else-if="!ordenes.length" class="nota">Todavía no tiene órdenes registradas.</p>
 
-    <article v-for="o in ordenes" :key="o.ordenId" class="orden">
+    <div v-if="ordenes.length" class="filtro" role="group" aria-label="Filtrar órdenes">
+      <button type="button" :class="{ activo: filtro === 'todas' }" @click="filtro = 'todas'">Todas</button>
+      <button type="button" :class="{ activo: filtro === 'activas' }" @click="filtro = 'activas'">En proceso</button>
+      <button type="button" :class="{ activo: filtro === 'historial' }" @click="filtro = 'historial'">Historial</button>
+    </div>
+    <p v-if="ordenes.length && !visibles.length" class="nota">No hay órdenes en esta vista.</p>
+
+    <article v-for="o in visibles" :key="o.ordenId" class="orden">
       <div class="orden-cab">
         <h2>{{ o.numeroOrden }}</h2>
         <span class="chip" :class="o.estado.toLowerCase()">{{ textoEstado(o.estado) }}</span>
@@ -71,14 +115,43 @@ onMounted(async () => {
         </li>
       </ol>
 
+      <!-- Avisos según el estado -->
+      <div v-if="o.estado === 'CANCELADO'" class="aviso cancelado">
+        <b>Orden cancelada el {{ fecha(o.ultimoCambio) }}.</b>
+        <span v-if="o.motivoCancelacion"> Motivo: {{ conPunto(o.motivoCancelacion) }}</span>
+        <span> Puede pasar a recoger su equipo a TechCare.</span>
+      </div>
+      <div v-else-if="o.estado === 'ESPERANDO_AUTORIZACION'" class="aviso espera">
+        <b>Su equipo espera su autorización.</b>
+        Costo estimado de mano de obra: <b>{{ moneda(o.costoEstimado) }}</b> (más repuestos, si se necesitan).
+        Comuníquese con TechCare para autorizar la reparación.
+      </div>
+      <div v-else-if="o.estado === 'LISTO'" class="aviso listo">
+        <b>¡Su equipo está listo!</b> Puede pasar a recogerlo<template v-if="(o.saldo ?? 0) > 0"> y cancelar el saldo de {{ moneda(o.saldo) }}</template>.
+      </div>
+      <div v-else-if="o.estado === 'ENTREGADO'" class="aviso listo">
+        <b>Entregado el {{ fechaHora(o.fechaEntrega) }}</b><template v-if="o.nombreRecibe"> a {{ o.nombreRecibe }}</template>.
+      </div>
+
       <dl class="datos">
         <div><dt>Ingreso</dt><dd>{{ fecha(o.fechaIngreso) }}</dd></div>
         <div><dt>Fecha estimada</dt><dd>{{ fecha(o.fechaEstimada) }}</dd></div>
+        <div><dt>Última actualización</dt><dd>{{ fechaHora(o.ultimoCambio) }}</dd></div>
         <div class="ancho"><dt>Problema reportado</dt><dd>{{ o.problemaReportado }}</dd></div>
-        <div><dt>Factura</dt><dd>{{ o.numeroFactura ?? 'Aún no facturada' }}</dd></div>
-        <div v-if="o.numeroFactura"><dt>Total</dt><dd>{{ moneda(o.total) }}</dd></div>
-        <div v-if="o.numeroFactura"><dt>Saldo</dt><dd :class="{ debe: (o.saldo ?? 0) > 0 }">{{ moneda(o.saldo) }}</dd></div>
+        <div v-if="o.diagnostico && o.estado !== 'CANCELADO'" class="ancho"><dt>Diagnóstico del técnico</dt><dd>{{ o.diagnostico }}</dd></div>
+        <template v-if="o.estado !== 'CANCELADO' || o.numeroFactura">
+          <div><dt>Factura</dt><dd>{{ o.numeroFactura ?? 'Aún no facturada' }}</dd></div>
+          <div v-if="o.numeroFactura"><dt>Total</dt><dd>{{ moneda(o.total) }}</dd></div>
+          <div v-if="o.numeroFactura"><dt>Pagado</dt><dd>{{ moneda(o.pagado) }}</dd></div>
+          <div v-if="o.numeroFactura"><dt>Saldo</dt><dd :class="{ debe: (o.saldo ?? 0) > 0 }">{{ moneda(o.saldo) }}</dd></div>
+        </template>
       </dl>
+
+      <div v-if="o.estado === 'ENTREGADO' && o.numeroFactura" class="acciones">
+        <button type="button" class="btn primario" :disabled="ocupado === o.ordenId" @click="descargar(o)">Descargar comprobante (PDF)</button>
+        <button type="button" class="btn" :disabled="ocupado === o.ordenId" @click="enviar(o)">Enviar a mi correo</button>
+        <span v-if="avisos[o.ordenId]?.texto" :class="avisos[o.ordenId]!.error ? 'error' : 'ok'" role="status">{{ avisos[o.ordenId]!.texto }}</span>
+      </div>
     </article>
   </main>
 </template>
@@ -118,6 +191,20 @@ h2 { margin: 0; font: 700 20px/1.2 Georgia, serif; color: var(--c-title); }
 dt { font-size: 12px; color: var(--c-muted); }
 dd { margin: 2px 0 0; font-weight: 600; }
 dd.debe { color: #c0392b; }
+.filtro { display: flex; gap: 6px; margin-bottom: 12px; }
+.filtro button { border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text);
+  padding: 6px 14px; border-radius: 999px; font-size: 14px; cursor: pointer; }
+.filtro button.activo { background: #17375e; border-color: #17375e; color: #fff; }
+.aviso { border-radius: 6px; padding: 10px 12px; margin: 0 0 12px; font-size: 14px; border-left: 4px solid; }
+.aviso.cancelado { background: rgb(222 76 76 / 0.12); border-color: #c0392b; }
+.aviso.espera { background: rgb(200 150 46 / 0.15); border-color: #c8962e; }
+.aviso.listo { background: rgb(46 139 87 / 0.14); border-color: #2e8b57; }
+.acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.btn { border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text);
+  padding: 8px 14px; border-radius: 4px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.btn.primario { background: #17375e; border-color: #17375e; color: #fff; }
+.btn:disabled { opacity: 0.6; cursor: default; }
+.ok { color: #2e8b57; font-size: 14px; }
 @media (max-width: 700px) {
   .resumen, .datos { grid-template-columns: 1fr 1fr; }
   .pasos { grid-template-columns: repeat(3, 1fr); }

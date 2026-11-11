@@ -6,7 +6,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import {
   tallerApi, ESTADOS_TALLER,
-  type OrdenTaller, type DetalleTaller, type RepuestoDisponible,
+  type OrdenTaller, type DetalleTaller, type RepuestoDisponible, type RepuestoUsado,
 } from '../api/taller'
 import { ordenesApi } from '@/features/ordenes/api/ordenes'
 import { useAuthStore } from '@/features/auth/stores/auth.store'
@@ -200,6 +200,35 @@ function registrarActividad() {
   ejecutar('actividad', () => tallerApi.registrarActividad({
     reparacionId: r.reparacionId, descripcion: fAct.descripcion.trim(), horasTrabajadas: horas,
   }), 'Actividad registrada.')
+}
+
+// ---------- quitar lo registrado por error (script 18: devuelve el stock, deja el movimiento) ----------
+function quitarActividad(numero: number, descripcion: string) {
+  const r = rep.value
+  if (!r) return
+  if (!window.confirm(`¿Quitar la actividad ${numero}: "${descripcion}"?`)) return
+  ejecutar('actividad', () => tallerApi.quitarActividad({ reparacionId: r.reparacionId, numeroActividad: numero }),
+    `Actividad ${numero} quitada.`)
+}
+
+const quitando = reactive({ clave: '', cantidad: 1, motivo: '' })
+const claveRep = (x: RepuestoUsado) => `${x.repuestoId}-${x.bodegaId}`
+function abrirQuitar(x: RepuestoUsado) {
+  Object.assign(quitando, { clave: claveRep(x), cantidad: x.cantidad, motivo: '' })
+  delete errores.quitar
+}
+function quitarRepuesto(x: RepuestoUsado) {
+  const r = rep.value
+  if (!r) return
+  const cantidad = Number(quitando.cantidad)
+  if (!Number.isInteger(cantidad) || cantidad < 1 || cantidad > x.cantidad)
+    return void (errores.quitar = `La cantidad debe ser un entero de 1 a ${x.cantidad}.`)
+  if (quitando.motivo.trim().length < 5) return void (errores.quitar = 'Escriba el motivo (mínimo 5 caracteres).')
+  ejecutar('quitar', () => tallerApi.quitarRepuesto({
+    reparacionId: r.reparacionId, repuestoId: x.repuestoId, bodegaId: x.bodegaId, cantidad, motivo: quitando.motivo.trim(),
+  }), `${cantidad} × ${x.repuesto} devuelto(s) a ${x.bodega}.`).then(() => {
+    if (!errores.quitar) quitando.clave = ''
+  })
 }
 
 function asignarRepuesto() {
@@ -397,14 +426,17 @@ function finalizar() {
             <h4>Actividades <span class="nota">({{ totalHoras }} h)</span></h4>
             <div class="tabla-wrap">
               <table>
-                <thead><tr><th>#</th><th>Actividad</th><th>Horas</th><th>Fecha</th></tr></thead>
+                <thead><tr><th>#</th><th>Actividad</th><th>Horas</th><th>Fecha</th><th v-if="enProceso"><span class="sr-only">Acción</span></th></tr></thead>
                 <tbody>
-                  <tr v-if="!detalle.actividades.length"><td colspan="4" class="vacio">Sin actividades registradas.</td></tr>
+                  <tr v-if="!detalle.actividades.length"><td :colspan="enProceso ? 5 : 4" class="vacio">Sin actividades registradas.</td></tr>
                   <tr v-for="a in detalle.actividades" :key="a.numeroActividad">
                     <td class="num">{{ a.numeroActividad }}</td>
                     <td>{{ a.descripcion }}</td>
                     <td>{{ a.horasTrabajadas ?? '—' }}</td>
                     <td class="detalle">{{ fechaHora(a.fechaRegistro) }}</td>
+                    <td v-if="enProceso" class="accion">
+                      <button type="button" class="link-quitar" :disabled="!!enviando" @click="quitarActividad(a.numeroActividad, a.descripcion)">Quitar</button>
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -412,7 +444,7 @@ function finalizar() {
             <form v-if="enProceso" class="en-linea" novalidate @submit.prevent="registrarActividad">
               <label class="campo grande">
                 <span>Nueva actividad</span>
-                <input v-model="fAct.descripcion" maxlength="300" placeholder="Ej. Se reemplazó la pantalla" />
+                <input v-model="fAct.descripcion" maxlength="300" placeholder="Ej. Se reemplazó la pantalla" @input="delete errores.actividad" />
               </label>
               <label class="campo corto">
                 <span>Horas</span>
@@ -426,17 +458,42 @@ function finalizar() {
             <h4>Repuestos <span class="nota">({{ moneda(totalRepuestos) }})</span></h4>
             <div class="tabla-wrap">
               <table>
-                <thead><tr><th>Código</th><th>Repuesto</th><th>Bodega</th><th>Cant.</th><th>Precio</th><th>Subtotal</th></tr></thead>
+                <thead><tr><th>Código</th><th>Repuesto</th><th>Bodega</th><th>Cant.</th><th>Precio</th><th>Subtotal</th><th v-if="enProceso"><span class="sr-only">Acción</span></th></tr></thead>
                 <tbody>
-                  <tr v-if="!detalle.repuestos.length"><td colspan="6" class="vacio">Sin repuestos asignados.</td></tr>
-                  <tr v-for="r in detalle.repuestos" :key="r.codigo + r.bodega">
-                    <td class="num">{{ r.codigo }}</td>
-                    <td>{{ r.repuesto }}</td>
-                    <td>{{ r.bodega }}</td>
-                    <td>{{ r.cantidad }}</td>
-                    <td>{{ moneda(r.precioVentaUnitario) }}</td>
-                    <td>{{ moneda(r.subtotal) }}</td>
-                  </tr>
+                  <tr v-if="!detalle.repuestos.length"><td :colspan="enProceso ? 7 : 6" class="vacio">Sin repuestos asignados.</td></tr>
+                  <template v-for="r in detalle.repuestos" :key="r.codigo + r.bodega">
+                    <tr>
+                      <td class="num">{{ r.codigo }}</td>
+                      <td>{{ r.repuesto }}</td>
+                      <td>{{ r.bodega }}</td>
+                      <td>{{ r.cantidad }}</td>
+                      <td>{{ moneda(r.precioVentaUnitario) }}</td>
+                      <td>{{ moneda(r.subtotal) }}</td>
+                      <td v-if="enProceso" class="accion">
+                        <button type="button" class="link-quitar" :disabled="!!enviando" @click="abrirQuitar(r)">Quitar</button>
+                      </td>
+                    </tr>
+                    <tr v-if="enProceso && quitando.clave === claveRep(r)" class="fila-quitar">
+                      <td colspan="7">
+                        <form class="en-linea" novalidate @submit.prevent="quitarRepuesto(r)">
+                          <label class="campo corto">
+                            <span>Cantidad a devolver</span>
+                            <input v-model.number="quitando.cantidad" type="number" min="1" :max="r.cantidad" step="1" />
+                          </label>
+                          <label class="campo grande">
+                            <span>Motivo</span>
+                            <input v-model="quitando.motivo" maxlength="150" placeholder="Ej. Se asignó por error / no era el modelo correcto" />
+                          </label>
+                          <button type="submit" class="btn primario" :disabled="enviando === 'quitar'">
+                            {{ enviando === 'quitar' ? 'Devolviendo…' : 'Devolver a bodega' }}
+                          </button>
+                          <button type="button" class="btn" @click="quitando.clave = ''">Cancelar</button>
+                        </form>
+                        <p v-if="errores.quitar" class="error" role="alert">{{ errores.quitar }}</p>
+                        <p class="nota">El stock vuelve a {{ r.bodega }} y queda registrado como ENTRADA en Movimientos.</p>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
@@ -615,4 +672,11 @@ tbody tr:nth-child(even) { background: var(--c-row); }
   border-top: 1px dashed var(--c-border, #d0d7e2); }
 .no-autoriza .campo { flex: 1; min-width: 220px; }
 .btn.peligro-btn { background: #b42318; border-color: #b42318; color: #fff; }
+.accion { text-align: right; width: 1%; white-space: nowrap; }
+.link-quitar { all: unset; cursor: pointer; color: #c0392b; text-decoration: underline; font-weight: 600; font-size: 14px; }
+.link-quitar:disabled { opacity: 0.5; cursor: not-allowed; }
+.link-quitar:focus-visible { outline: 2px solid #c8962e; outline-offset: 2px; }
+:root.dark .link-quitar { color: #f87171; }
+.fila-quitar td { background: var(--c-sel, rgba(200, 150, 46, 0.08)); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
